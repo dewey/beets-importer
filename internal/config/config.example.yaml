@@ -1,0 +1,34 @@
+# beets-importer configuration
+# Uncomment and fill in the values for your setup.
+# Run 'beets-importer config' to verify the result.
+#
+# ── Required ──────────────────────────────────────────────────────────────────
+# These must be set before any command will work.
+#
+# Path to your beets SQLite database.
+# db: ~/Music/Music Library Beets/Library/musiclibrary.db
+#
+# Directory to scan for new albums and upgrade candidates.
+# source: ~/Music/Music Library Beets/Inbox
+#
+# Path to the beet binary or a wrapper script.
+# Plain install:  beet: /opt/homebrew/bin/beet
+# uv-based setup: beet: ~/Music/Music Library Beets/beet.sh
+# See https://github.com/dewey/beets-importer#beet-wrapper-script
+# beet: /opt/homebrew/bin/beet
+#
+# ── Optional ──────────────────────────────────────────────────────────────────
+# Leave these commented out to use the defaults.
+#
+# Import log file written by beet import. When set, albums that appear in the
+# log are skipped by 'import --latest' without needing a library DB lookup.
+# If not set, deduplication relies solely on the library database.
+# log: ~/Music/Music Library Beets/Library/import_log.txt
+#
+# Print a warning for every directory that could not be scanned, instead of
+# showing a single summary count at the end. (default: false)
+# verbose: false
+#
+# Skip the scan cache and re-read every directory from disk on each run.
+# Useful after manually moving files. (default: false)
+# no_cache: false
