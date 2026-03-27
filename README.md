@@ -30,11 +30,20 @@ The core problem: beets' own importer processes albums one-by-one in sequence. I
 
 ### 1. Install
 
+**Homebrew (macOS/Linux):**
+
+```sh
+brew tap dewey/beets-importer https://github.com/dewey/beets-importer
+brew install dewey/beets-importer/beets-importer
+```
+
+**Go:**
+
 ```sh
 go install github.com/dewey/beets-importer@latest
 ```
 
-Or build from source:
+**From source:**
 
 ```sh
 make build
