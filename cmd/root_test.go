@@ -22,7 +22,7 @@ func newTestFlagSet() (pf *pflag.FlagSet, db, source, beet, log *string, verbose
 	pf.StringVar(db, "db", "", "")
 	pf.StringVar(source, "source", "", "")
 	pf.StringVar(beet, "beet", "", "")
-	pf.StringVar(log, "log", "", "")
+	pf.StringVar(log, "import-log", "", "")
 	pf.BoolVar(verbose, "verbose", false, "")
 	pf.BoolVar(noCache, "no-cache", false, "")
 	return
@@ -32,12 +32,12 @@ func TestApplyConfigToFlags_appliesWhenNotChanged(t *testing.T) {
 	pf, db, source, beet, log, verbose, noCache := newTestFlagSet()
 
 	cfg := config.Config{
-		DB:      "/config/db.db",
-		Source:  "/config/source",
-		Beet:    "/config/beet",
-		Log:     "/config/import.log",
-		Verbose: true,
-		NoCache: true,
+		DB:        "/config/db.db",
+		Source:    "/config/source",
+		Beet:      "/config/beet",
+		ImportLog: "/config/import.log",
+		Verbose:   true,
+		NoCache:   true,
 	}
 	applyConfigToFlags(cfg, pf)
 
@@ -126,5 +126,14 @@ func TestRequireFlag_missingReturnsError(t *testing.T) {
 func TestRequireFlag_presentReturnsNil(t *testing.T) {
 	if err := requireFlag("source", "/some/path"); err != nil {
 		t.Errorf("unexpected error for set flag: %v", err)
+	}
+}
+
+func TestApplyConfigToFlagsSkipsMissingFlags(t *testing.T) {
+	pf := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	db := pf.String("db", "", "")
+	applyConfigToFlags(config.Config{DB: "/config/db.db", Source: "/config/source"}, pf)
+	if *db != "/config/db.db" {
+		t.Errorf("db = %q, want /config/db.db", *db)
 	}
 }

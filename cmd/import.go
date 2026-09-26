@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/dewey/beets-importer/internal/beets"
 	"github.com/dewey/beets-importer/internal/matcher"
 	"github.com/dewey/beets-importer/internal/picker"
@@ -23,42 +23,41 @@ import (
 
 var (
 	flagImportFile      string
-	flagImportLatest    bool
 	flagImportLimit     int
-	flagImportAfter     string
+	flagImportSince     string
 	flagImportThreshold float64
 )
 
 var importCmd = &cobra.Command{
 	Use:   "import",
-	Short: "Import albums from a file of paths or from the latest unimported albums",
+	Short: "Pick recently added unimported albums and import them, or import from a file of paths",
 	RunE:  runImport,
 }
 
 func init() {
+	addDBFlag(importCmd)
+	addSourceFlag(importCmd)
+	addBeetFlag(importCmd)
+	addScanFlags(importCmd)
+	importCmd.Flags().StringVar(&flagImportLog, "import-log", "",
+		"Path to the beets import log; albums listed there are skipped")
 	importCmd.Flags().StringVar(&flagImportFile, "from-file", "",
-		"File containing one album path per line")
-	importCmd.Flags().BoolVar(&flagImportLatest, "latest", false,
-		"Pick from recently added unimported albums")
+		"Import the album paths in this file instead of opening the picker")
 	importCmd.Flags().IntVar(&flagImportLimit, "limit", 0,
 		"Maximum number of albums to process (0 = no limit)")
-	importCmd.Flags().StringVar(&flagImportAfter, "after", "",
-		"Only consider albums added after this date (YYYY-MM-DD); only used with --latest")
+	importCmd.Flags().StringVar(&flagImportSince, "since", "",
+		"Only show albums added on or after this date (YYYY-MM-DD)")
 	importCmd.Flags().Float64Var(&flagImportThreshold, "threshold", 0.85,
-		"Match confidence above which an album is considered already imported; only used with --latest")
+		"Match confidence above which an album is considered already imported")
+	importCmd.MarkFlagsMutuallyExclusive("from-file", "since")
+	importCmd.MarkFlagsMutuallyExclusive("from-file", "threshold")
 }
 
 func runImport(_ *cobra.Command, _ []string) error {
-	switch {
-	case flagImportLatest && flagImportFile != "":
-		return fmt.Errorf("--latest and --from-file are mutually exclusive")
-	case !flagImportLatest && flagImportFile == "":
-		return fmt.Errorf("one of --latest or --from-file is required")
-	case flagImportLatest:
-		return runImportLatest()
-	default:
+	if flagImportFile != "" {
 		return runImportFromFile()
 	}
+	return runImportLatest()
 }
 
 func runImportLatest() error {
@@ -72,13 +71,13 @@ func runImportLatest() error {
 		return err
 	}
 
-	var afterTime time.Time
-	if flagImportAfter != "" {
-		t, err := time.Parse("2006-01-02", flagImportAfter)
+	var since time.Time
+	if flagImportSince != "" {
+		t, err := time.Parse("2006-01-02", flagImportSince)
 		if err != nil {
-			return fmt.Errorf("--after: expected YYYY-MM-DD, got %q", flagImportAfter)
+			return fmt.Errorf("--since: expected YYYY-MM-DD, got %q", flagImportSince)
 		}
-		afterTime = t
+		since = t
 	}
 
 	var spinMsg atomic.Value
@@ -95,7 +94,7 @@ func runImportLatest() error {
 		styleLabel.Render(fmt.Sprintf("%d albums in library", len(libraryAlbums))),
 	)
 
-	logEntries := readImportLog(flagLog)
+	logEntries := readImportLog(flagImportLog)
 
 	spinMsg.Store("Listing source directory…")
 	stop = startSpinner(&spinMsg)
@@ -125,7 +124,7 @@ func runImportLatest() error {
 		if len(candidates) >= limit {
 			break
 		}
-		if !afterTime.IsZero() && d.mtime.Before(afterTime) {
+		if !since.IsZero() && d.mtime.Before(since) {
 			continue
 		}
 		if inLog(d.name, logEntries) {
@@ -155,7 +154,7 @@ func runImportLatest() error {
 		styleLabel.Render(fmt.Sprintf("%d unimported albums", len(candidates))),
 	)
 
-	p := tea.NewProgram(picker.New(candidates), tea.WithAltScreen())
+	p := tea.NewProgram(picker.New(candidates))
 	finalModel, err := p.Run()
 	if err != nil {
 		return fmt.Errorf("picker: %w", err)

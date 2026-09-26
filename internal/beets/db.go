@@ -21,6 +21,58 @@ type Album struct {
 	Path        string // directory containing the album's tracks
 }
 
+// Item represents a single track in the beets library.
+type Item struct {
+	ID      int
+	AlbumID int
+	Artist  string
+	Album   string
+	Title   string
+	Format  string
+	Bitrate int // in bps
+	Path    string
+}
+
+// LoadItems opens the beets SQLite database and returns all tracks.
+func LoadItems(dbPath string) ([]Item, error) {
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro")
+	if err != nil {
+		return nil, fmt.Errorf("open beets db: %w", err)
+	}
+	defer db.Close()
+
+	const query = `
+SELECT
+    id,
+    COALESCE(album_id, 0)   AS album_id,
+    COALESCE(artist, '')    AS artist,
+    COALESCE(album, '')     AS album,
+    COALESCE(title, '')     AS title,
+    COALESCE(format, '')    AS format,
+    COALESCE(bitrate, 0)    AS bitrate,
+    COALESCE(path, '')      AS path
+FROM items
+`
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("query items: %w", err)
+	}
+	defer rows.Close()
+
+	var items []Item
+	for rows.Next() {
+		var it Item
+		if err := rows.Scan(
+			&it.ID, &it.AlbumID, &it.Artist, &it.Album,
+			&it.Title, &it.Format, &it.Bitrate, &it.Path,
+		); err != nil {
+			return nil, fmt.Errorf("scan item row: %w", err)
+		}
+		items = append(items, it)
+	}
+	return items, rows.Err()
+}
+
 // LoadAlbums opens the beets SQLite database and returns all albums with aggregated track info.
 func LoadAlbums(dbPath string) ([]Album, error) {
 	db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro")

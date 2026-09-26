@@ -57,7 +57,7 @@ func TestLoad_validYAML(t *testing.T) {
 db: /some/db.db
 source: /some/source
 beet: /usr/local/bin/beet
-log: /some/import.log
+import_log: /some/import.log
 verbose: true
 no_cache: true
 `)
@@ -77,8 +77,8 @@ no_cache: true
 	if cfg.Beet != "/usr/local/bin/beet" {
 		t.Errorf("Beet = %q, want /usr/local/bin/beet", cfg.Beet)
 	}
-	if cfg.Log != "/some/import.log" {
-		t.Errorf("Log = %q, want /some/import.log", cfg.Log)
+	if cfg.ImportLog != "/some/import.log" {
+		t.Errorf("ImportLog = %q, want /some/import.log", cfg.ImportLog)
 	}
 	if !cfg.Verbose {
 		t.Error("Verbose should be true")
@@ -150,7 +150,7 @@ func TestLoad_commentedOutValues(t *testing.T) {
 		t.Fatal("expected found=true")
 	}
 	// All values should be zero — template is fully commented out.
-	if cfg.DB != "" || cfg.Source != "" || cfg.Beet != "" || cfg.Log != "" {
+	if cfg.DB != "" || cfg.Source != "" || cfg.Beet != "" || cfg.ImportLog != "" {
 		t.Errorf("expected all-zero Config from template, got %+v", cfg)
 	}
 }
@@ -171,13 +171,13 @@ func TestWriteTemplate_createsFile(t *testing.T) {
 	}
 }
 
-func TestWriteTemplate_noopIfExists(t *testing.T) {
+func TestWriteTemplateFailsIfExists(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	existing := "db: /existing\n"
 	os.WriteFile(path, []byte(existing), 0o644)
 
-	if err := config.WriteTemplate(path); err != nil {
-		t.Fatalf("WriteTemplate: %v", err)
+	if err := config.WriteTemplate(path); err == nil {
+		t.Fatal("WriteTemplate should fail when the file exists")
 	}
 	data, _ := os.ReadFile(path)
 	if string(data) != existing {

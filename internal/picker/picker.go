@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/dewey/beets-importer/internal/source"
 )
@@ -105,7 +105,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.height = 3
 		}
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// When inspect modal is open, only ESC is handled (to close it).
 		if m.inspect != nil {
 			if msg.String() == "esc" {
@@ -138,7 +138,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case " ":
+		case "space":
 			if len(m.items) > 0 {
 				m.items[m.cursor].selected = !m.items[m.cursor].selected
 			}
@@ -165,7 +165,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = true
+	return v
+}
+
+func (m Model) render() string {
 	base := m.viewList()
 	if m.inspect == nil {
 		return base

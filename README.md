@@ -4,6 +4,7 @@ A CLI tool for [beets](https://beets.readthedocs.io) that helps with two things:
 
 - **`import`**: pick recently-added albums from your download folder and import them interactively, or import from a text file of paths
 - **`upgrades`**: scan your download folder, match albums against your library, and surface upgrade candidates: better format (e.g. FLAC replacing MP3) or higher bitrate
+- **`doctor`**: check your beets library for problems such as empty or untracked folders, low bitrate files, and missing artwork or years
 
 ## Screenshots
 
@@ -52,7 +53,7 @@ make build
 ### 2. Create your config file
 
 ```sh
-beets-importer config
+beets-importer config init
 ```
 
 This copies [`internal/config/config.example.yaml`](internal/config/config.example.yaml) to `~/.config/beets-importer/config.yaml` and prints the path.
@@ -77,17 +78,20 @@ The file contains comments explaining every option, including which are required
 ### 4. Verify
 
 ```sh
-beets-importer config
+beets-importer config show
 ```
 
 ### 5. Run
 
 ```sh
 # Pick from recently added albums and import interactively
-beets-importer import --latest
+beets-importer import
 
 # Find albums in your source folder that are higher quality than your library copy
 beets-importer upgrades
+
+# Check the health of your library
+beets-importer doctor
 ```
 
 ---
@@ -108,19 +112,21 @@ DIR="$(dirname "$(realpath "$0")")"
 exec uv run --project "$DIR" beet -c "$DIR/plugins/config.yaml" "$@"
 ```
 
-## Global flags
+## Shared flags
 
-These apply to every subcommand. All path flags have no built-in default — they must be set in the config file or passed explicitly.
+Each command only accepts the flags it uses. Path flags have no built-in default: set them in the config file or pass them on the command line.
 
-| Flag | Description |
-|---|---|
-| `--db` | Path to beets SQLite database |
-| `--source` | Source music directory to scan |
-| `--beet` | Path to beet binary or wrapper script |
-| `--log` | Path to beets import log (optional) |
-| `--verbose` | Print per-directory warnings during scanning instead of a summary count |
-| `--no-cache` | Disable the source directory scan cache and force a full re-scan |
-| `--config` | Path to config file (default: `~/.config/beets-importer/config.yaml`) |
+| Flag | Config key | Commands | Description |
+|---|---|---|---|
+| `--config` | | all | Path to config file (default: `~/.config/beets-importer/config.yaml`) |
+| `--db` | `db` | import, upgrades, doctor | Path to beets SQLite database |
+| `--source` | `source` | import, upgrades | Download folder to scan for new albums |
+| `--beet` | `beet` | import, upgrades, doctor | Path to beet binary or wrapper script |
+| `--import-log` | `import_log` | import | Path to beets import log (optional) |
+| `--verbose` | `verbose` | import, upgrades | Print per-directory warnings during scanning instead of a summary count |
+| `--no-cache` | `no_cache` | import, upgrades | Disable the source directory scan cache and force a full re-scan |
+
+`beets-importer --version` prints the installed version.
 
 ## Scan cache
 
@@ -157,16 +163,16 @@ beets-importer upgrades --library-format MP3,AAC
 beets-importer upgrades --source-format FLAC
 
 # Combine filters: library is MP3/AAC and source is FLAC, open an interactive picker
-beets-importer upgrades --library-format MP3,AAC --source-format FLAC --pick
+beets-importer upgrades --library-format MP3,AAC --source-format FLAC -i
 
 # Write results to CSV, then import from it later
-beets-importer upgrades --output-file /tmp/upgrades.csv
+beets-importer upgrades -o /tmp/upgrades.csv
 beets-importer import --from-file /tmp/upgrades.csv
 ```
 
-### `--pick` — interactive picker
+### `--interactive` / `-i`: interactive picker
 
-When `--pick` is passed, an interactive picker opens after scanning instead of printing a table. Each candidate is shown as two aligned rows so you can compare source and library side by side:
+When `--interactive` is passed, an interactive picker opens after scanning instead of printing a table. Each candidate is shown as two aligned rows so you can compare source and library side by side:
 
 ```
   [ ] Source:   Blumentopf          Kein Zufall             1999  16   FLAC   Similarity 0.90
@@ -183,14 +189,15 @@ Columns: artist · album · year · track count · format. Fields that match are
 
 | Flag | Default | Description |
 |---|---|---|
-| `--pick` | false | Open an interactive picker after scanning to select candidates to import |
+| `--interactive`, `-i` | false | Open an interactive picker after scanning to select candidates to import |
 | `--limit` | 0 | Stop after finding this many candidates (0 = scan everything) |
 | `--threshold` | 0.70 | Minimum similarity score (0–1) to consider a source/library pair a match |
 | `--min-bitrate-delta` | 32 | Minimum bitrate improvement in kbps to flag a same-format upgrade |
 | `--library-format` | — | Only consider library albums in these formats, comma-separated (e.g. `MP3,AAC`) |
 | `--source-format` | — | Only consider source albums in these formats, comma-separated (e.g. `FLAC`) |
 | `--require-year-match` | false | Skip candidates where both sides have a known year that differs |
-| `--output-file` | — | Write candidates to a CSV file instead of printing a table |
+| `--output`, `-o` | — | Write candidates to a CSV file instead of printing a table |
+| `--all` | false | Show all matched pairs, not only upgrade candidates |
 
 ### Output table columns
 
@@ -208,30 +215,30 @@ Columns: artist · album · year · track count · format. Fields that match are
 
 ## `import` — import albums
 
-Two modes, selected by a required flag.
+By default `import` opens a picker. Pass `--from-file` to import a list of paths instead.
 
-### `--latest` — interactive picker
+### Interactive picker (default)
 
 Lists recently-added directories in the source folder that aren't already in your beets library, sorted newest-first. Opens an interactive picker to select what to import, then calls `beet import` for each selection.
 
 ```sh
 # Pick from everything new in the source directory
-beets-importer import --latest
+beets-importer import
 
 # Only show the 20 most recently added
-beets-importer import --latest --limit 20
+beets-importer import --limit 20
 
 # Only show albums added after a specific date
-beets-importer import --latest --after 2024-01-01
+beets-importer import --since 2024-01-01
 ```
 
-An album is considered already imported if it appears in the beets import log (`--log`) or if the library contains a high-confidence match (controlled by `--threshold`).
+An album is considered already imported if it appears in the beets import log (`--import-log`) or if the library contains a high-confidence match (controlled by `--threshold`).
 
-### `--from-file` — import from a text file
+### `--from-file`: import from a text file
 
 Calls `beet import` for each path in a file. Two formats are supported, detected by file extension:
 
-- **`.csv`** — reads the `source_path` column; the CSV produced by `upgrades --output-file` works directly
+- **`.csv`** — reads the `source_path` column; the CSV produced by `upgrades --output` works directly
 - **anything else** — one path per line; lines starting with `#` and blank lines are ignored
 
 ```sh
@@ -243,8 +250,57 @@ beets-importer import --from-file /tmp/my-list.txt --limit 5
 
 | Flag | Default | Description |
 |---|---|---|
-| `--latest` | false | Pick from recently-added unimported albums (mutually exclusive with `--from-file`) |
-| `--from-file` | — | File of album paths to import (mutually exclusive with `--latest`) |
+| `--from-file` | — | Import the paths in this file instead of opening the picker |
 | `--limit` | 0 | Maximum number of albums to process (0 = no limit) |
-| `--after` | — | Only show albums added after this date (YYYY-MM-DD); `--latest` only |
-| `--threshold` | 0.85 | Similarity above which an album is considered already imported; `--latest` only |
+| `--since` | — | Only show albums added on or after this date (YYYY-MM-DD); not with `--from-file` |
+| `--threshold` | 0.85 | Similarity above which an album is considered already imported; not with `--from-file` |
+
+---
+
+## `doctor`: check library health
+
+Runs a set of linters against your beets library and shows the results in a scrollable view.
+
+`doctor` reads the beets database (`--db`). Two linters also walk the folder beets moves music into. That folder is read from `directory:` in your beets config by running `beet config`, so there is nothing extra to set.
+
+| Linter | Needs library | Flags |
+|---|---|---|
+| `empty_dirs` | yes | Folders with no entries at all |
+| `untracked_dirs` | yes | Folders with audio files but no track in the beets database |
+| `low_quality` | no | Tracks below `doctor.low_quality_threshold_kbps` (default 128), and AAC below 256 kbps |
+| `lowercase_metadata` | no | Tracks where artist, album and title are all lowercase |
+| `missing_artwork` | no | Albums without an art path |
+| `missing_year` | no | Albums without a year |
+
+All linters run by default. Turn one off in the config:
+
+```yaml
+doctor:
+  linters:
+    lowercase_metadata: false
+```
+
+### Example commands
+
+```sh
+# Interactive report
+beets-importer doctor
+
+# Full report as JSON
+beets-importer doctor --json
+
+# Only some linters
+beets-importer doctor --linter empty_dirs,untracked_dirs
+
+# Paths for one linter, e.g. to remove empty folders
+beets-importer doctor --linter empty_dirs --paths --print0 | xargs -0 rmdir
+```
+
+### Flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--json` | false | Print results as JSON instead of the interactive view |
+| `--linter` | — | Run only these linters, comma-separated |
+| `--paths` | false | Print only issue paths of the selected linters, one per line (requires `--linter`) |
+| `--print0`, `-0` | false | With `--paths`, separate paths with NUL (for `xargs -0`) |

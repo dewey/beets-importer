@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 //go:embed config.example.yaml
@@ -17,15 +17,25 @@ var templateBytes []byte
 // Exported so tests can verify the template parses as valid YAML.
 var Template = string(templateBytes)
 
+// DoctorConfig holds settings for the doctor command.
+type DoctorConfig struct {
+	// LowQualityThresholdKbps is the bitrate below which a track is flagged as
+	// low quality. Defaults to 128 kbps when unset.
+	LowQualityThresholdKbps int `yaml:"low_quality_threshold_kbps"`
+	// Linters turns individual linters off by name (e.g. "empty_dirs": false).
+	Linters map[string]bool `yaml:"linters"`
+}
+
 // Config holds settings loaded from the config file.
 // Keys use underscores to follow YAML convention; flag names use hyphens.
 type Config struct {
-	DB      string `yaml:"db"`
-	Source  string `yaml:"source"`
-	Beet    string `yaml:"beet"`
-	Log     string `yaml:"log"`
-	Verbose bool   `yaml:"verbose"`
-	NoCache bool   `yaml:"no_cache"`
+	DB        string       `yaml:"db"`
+	Source    string       `yaml:"source"`
+	Beet      string       `yaml:"beet"`
+	ImportLog string       `yaml:"import_log"`
+	Verbose   bool         `yaml:"verbose"`
+	NoCache   bool         `yaml:"no_cache"`
+	Doctor    DoctorConfig `yaml:"doctor"`
 }
 
 // DefaultPath returns the default config file location for the current OS.
@@ -55,7 +65,7 @@ func Load(path string) (cfg Config, found bool, err error) {
 	cfg.DB = ExpandPath(cfg.DB)
 	cfg.Source = ExpandPath(cfg.Source)
 	cfg.Beet = ExpandPath(cfg.Beet)
-	cfg.Log = ExpandPath(cfg.Log)
+	cfg.ImportLog = ExpandPath(cfg.ImportLog)
 	return cfg, true, nil
 }
 
@@ -78,7 +88,7 @@ func ExpandPath(path string) string {
 // parent directories as needed. It is a no-op if the file already exists.
 func WriteTemplate(path string) error {
 	if _, err := os.Stat(path); err == nil {
-		return nil // already exists
+		return fmt.Errorf("config file already exists: %s", path)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create config dir: %w", err)

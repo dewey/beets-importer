@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/dewey/beets-importer/internal/source"
 )
 
@@ -19,7 +19,7 @@ func albums(names ...string) []source.Album {
 }
 
 func sendKey(m Model, key string) Model {
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+	next, _ := m.Update(tea.KeyPressMsg{Code: []rune(key)[0], Text: key})
 	return next.(Model)
 }
 
@@ -99,7 +99,7 @@ func TestSelectAll_togglesAll(t *testing.T) {
 	m := New(albums("A", "B", "C"))
 
 	// ctrl+a selects all when none selected
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	m = next.(Model)
 	for i, item := range m.items {
 		if !item.selected {
@@ -108,7 +108,7 @@ func TestSelectAll_togglesAll(t *testing.T) {
 	}
 
 	// ctrl+a again deselects all
-	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	next, _ = m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	m = next.(Model)
 	for i, item := range m.items {
 		if item.selected {
@@ -122,7 +122,7 @@ func TestSelectAll_partialSelectsAll(t *testing.T) {
 	// Select only item 0
 	m = sendKey(m, " ")
 	// ctrl+a should select all (not deselect, since not all are selected)
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	m = next.(Model)
 	for i, item := range m.items {
 		if !item.selected {
@@ -136,7 +136,7 @@ func TestConfirm_enter(t *testing.T) {
 	if m.Confirmed {
 		t.Fatal("should not be confirmed initially")
 	}
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = next.(Model)
 	if !m.Confirmed {
 		t.Error("should be confirmed after enter")
@@ -147,25 +147,12 @@ func TestConfirm_enter(t *testing.T) {
 }
 
 func TestQuit_doesNotConfirm(t *testing.T) {
-	for _, key := range []string{"q", "esc"} {
+	for _, msg := range []tea.KeyPressMsg{{Code: 'q', Text: "q"}, {Code: tea.KeyEscape}} {
 		m := New(albums("A"))
-		var keyType tea.KeyType
-		switch key {
-		case "q":
-			keyType = tea.KeyRunes
-		case "esc":
-			keyType = tea.KeyEscape
-		}
-		var msg tea.KeyMsg
-		if keyType == tea.KeyRunes {
-			msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
-		} else {
-			msg = tea.KeyMsg{Type: keyType}
-		}
 		next, _ := m.Update(msg)
 		m = next.(Model)
 		if m.Confirmed {
-			t.Errorf("key %q should not confirm", key)
+			t.Errorf("key %q should not confirm", msg)
 		}
 	}
 }
@@ -239,7 +226,7 @@ func TestNew_emptyAlbums_navigationNoPanic(t *testing.T) {
 	m := New(nil)
 	// j/k/space on an empty list must not panic.
 	for _, key := range []string{"j", "k", " "} {
-		next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+		next, _ := m.Update(tea.KeyPressMsg{Code: []rune(key)[0], Text: key})
 		m = next.(Model)
 	}
 	if m.cursor != 0 {
@@ -306,7 +293,7 @@ func TestScrolling_offsetRetractsWhenCursorReturnsToTop(t *testing.T) {
 // ── Inspect modal ─────────────────────────────────────────────────────────────
 
 func sendEsc(m Model) (Model, tea.Cmd) {
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	return next.(Model), cmd
 }
 
