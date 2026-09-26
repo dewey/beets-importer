@@ -8,7 +8,7 @@ import (
 
 func TestBuildSpecsDisabledByConfig(t *testing.T) {
 	cfg := config.DoctorConfig{Linters: map[string]bool{"missing_year": false, "low_quality": true}}
-	for _, s := range buildSpecs(nil, nil, "/lib", cfg) {
+	for _, s := range buildSpecs(nil, nil, "/lib", "/src", cfg) {
 		wantEnabled := s.Linter.Name() != "missing_year"
 		if s.Enabled != wantEnabled {
 			t.Errorf("%s: enabled = %v, want %v", s.Linter.Name(), s.Enabled, wantEnabled)
@@ -17,7 +17,7 @@ func TestBuildSpecsDisabledByConfig(t *testing.T) {
 }
 
 func TestSelectSpecs(t *testing.T) {
-	specs := buildSpecs(nil, nil, "/lib", config.DoctorConfig{})
+	specs := buildSpecs(nil, nil, "/lib", "/src", config.DoctorConfig{})
 	got, err := selectSpecs(specs, []string{"missing_year", "empty_dirs"})
 	if err != nil {
 		t.Fatalf("selectSpecs() error: %v", err)

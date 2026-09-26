@@ -41,6 +41,7 @@ The library folder on disk is read from 'beet config'.`,
 
 func init() {
 	addDBFlag(doctorCmd)
+	addSourceFlag(doctorCmd)
 	addBeetFlag(doctorCmd)
 	doctorCmd.Flags().BoolVar(&flagDoctorJSON, "json", false,
 		"Print results as JSON to stdout instead of the interactive view")
@@ -80,6 +81,7 @@ type doctorModel struct {
 
 	dbPath      string
 	libraryRoot string
+	sourceRoot  string
 	cfg         config.DoctorConfig
 	specs       []doctor.Spec
 
@@ -96,7 +98,7 @@ type doctorModel struct {
 	err error
 }
 
-func newDoctorModel(dbPath, libraryRoot string, cfg config.DoctorConfig) doctorModel {
+func newDoctorModel(dbPath, libraryRoot, sourceRoot string, cfg config.DoctorConfig) doctorModel {
 	s := spinner.New()
 	s.Spinner = spinner.Spinner{Frames: spinnerFrames, FPS: time.Second / 12}
 	return doctorModel{
@@ -104,6 +106,7 @@ func newDoctorModel(dbPath, libraryRoot string, cfg config.DoctorConfig) doctorM
 		phase:       doctorPhaseLoading,
 		dbPath:      dbPath,
 		libraryRoot: libraryRoot,
+		sourceRoot:  sourceRoot,
 		cfg:         cfg,
 	}
 }
@@ -150,7 +153,7 @@ func (m doctorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = doctorPhaseDone
 			return m, tea.Quit
 		}
-		m.specs, _ = selectSpecs(buildSpecs(msg.albums, msg.items, m.libraryRoot, m.cfg), flagDoctorLinters)
+		m.specs, _ = selectSpecs(buildSpecs(msg.albums, msg.items, m.libraryRoot, m.sourceRoot, m.cfg), flagDoctorLinters)
 		m.totalLinters = len(m.specs)
 		m.pending = make(map[string]bool)
 		for _, s := range m.specs {
@@ -399,7 +402,7 @@ func renderIssueGroup(b *strings.Builder, r doctor.Result, width int) {
 	b.WriteString("\n")
 }
 
-func buildSpecs(albums []beets.Album, items []beets.Item, libraryRoot string, cfg config.DoctorConfig) []doctor.Spec {
+func buildSpecs(albums []beets.Album, items []beets.Item, libraryRoot, sourceRoot string, cfg config.DoctorConfig) []doctor.Spec {
 	thresholdBps := cfg.LowQualityThresholdKbps * 1000
 	if thresholdBps == 0 {
 		thresholdBps = 128_000
@@ -411,6 +414,7 @@ func buildSpecs(albums []beets.Album, items []beets.Item, libraryRoot string, cf
 		{Linter: linters.NewLowercaseMetadata(items)},
 		{Linter: linters.NewMissingArtwork(albums)},
 		{Linter: linters.NewMissingYear(albums)},
+		{Linter: linters.NewDuplicateNames(libraryRoot, sourceRoot)},
 	}
 	for i := range specs {
 		name := specs[i].Linter.Name()
@@ -449,6 +453,9 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 	if err := requireFlag("db", flagDB); err != nil {
 		return err
 	}
+	if err := requireFlag("source", flagSource); err != nil {
+		return err
+	}
 	if err := requireFlag("beet", flagBeet); err != nil {
 		return err
 	}
@@ -458,7 +465,7 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 	if flagDoctorPaths && len(flagDoctorLinters) == 0 {
 		return fmt.Errorf("--paths requires --linter (e.g. --linter empty_dirs)")
 	}
-	if _, err := selectSpecs(buildSpecs(nil, nil, "", loadedConfig.Doctor), flagDoctorLinters); err != nil {
+	if _, err := selectSpecs(buildSpecs(nil, nil, "", "", loadedConfig.Doctor), flagDoctorLinters); err != nil {
 		return err
 	}
 	library, err := beets.LibraryDir(flagBeet)
@@ -467,10 +474,10 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 	}
 
 	if flagDoctorPaths || flagDoctorJSON {
-		return runDoctorHeadless(flagDB, library)
+		return runDoctorHeadless(flagDB, library, flagSource)
 	}
 
-	final, err := tea.NewProgram(newDoctorModel(flagDB, library, loadedConfig.Doctor)).Run()
+	final, err := tea.NewProgram(newDoctorModel(flagDB, library, flagSource, loadedConfig.Doctor)).Run()
 	if err != nil {
 		return fmt.Errorf("tui: %w", err)
 	}
@@ -508,7 +515,7 @@ type jsonSummary struct {
 
 // runDoctorHeadless loads the library, runs the (optionally filtered) linters
 // synchronously, and writes machine-readable output instead of the TUI.
-func runDoctorHeadless(dbPath, libraryRoot string) error {
+func runDoctorHeadless(dbPath, libraryRoot, sourceRoot string) error {
 	albums, err := beets.LoadAlbums(dbPath)
 	if err != nil {
 		return fmt.Errorf("loading albums: %w", err)
@@ -518,7 +525,7 @@ func runDoctorHeadless(dbPath, libraryRoot string) error {
 		return fmt.Errorf("loading items: %w", err)
 	}
 
-	specs, err := selectSpecs(buildSpecs(albums, items, libraryRoot, loadedConfig.Doctor), flagDoctorLinters)
+	specs, err := selectSpecs(buildSpecs(albums, items, libraryRoot, sourceRoot, loadedConfig.Doctor), flagDoctorLinters)
 	if err != nil {
 		return err
 	}

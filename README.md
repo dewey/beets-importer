@@ -120,7 +120,7 @@ Each command only accepts the flags it uses. Path flags have no built-in default
 |---|---|---|---|
 | `--config` | | all | Path to config file (default: `~/.config/beets-importer/config.yaml`) |
 | `--db` | `db` | upgrades, doctor | Path to beets SQLite database |
-| `--source` | `source` | import, upgrades | Download folder to scan for new albums |
+| `--source` | `source` | import, upgrades, doctor | Download folder to scan for new albums |
 | `--beet` | `beet` | import, upgrades, doctor | Path to beet binary or wrapper script |
 | `--state-file` | `state_file` | import | Path to beets incremental state file (`state.pickle`) |
 | `--verbose` | `verbose` | import, upgrades | Print per-directory warnings during scanning instead of a summary count |
@@ -261,7 +261,7 @@ beets-importer import --from-file /tmp/my-list.txt --limit 5
 
 Runs a set of linters against your beets library and shows the results in a scrollable view.
 
-`doctor` reads the beets database (`--db`). Two linters also walk the folder beets moves music into. That folder is read from `directory:` in your beets config by running `beet config`, so there is nothing extra to set.
+`doctor` reads the beets database (`--db`). Some linters also walk the folder beets moves music into. That folder is read from `directory:` in your beets config by running `beet config`, so there is nothing extra to set.
 
 | Linter | Needs library | Flags |
 |---|---|---|
@@ -271,6 +271,7 @@ Runs a set of linters against your beets library and shows the results in a scro
 | `lowercase_metadata` | no | Tracks where artist, album and title are all lowercase |
 | `missing_artwork` | no | Albums without an art path |
 | `missing_year` | no | Albums without a year |
+| `duplicate_names` | yes | Folders holding two entries with the same name in different Unicode forms (NFC and NFD). Also walks `--source` |
 
 All linters run by default. Turn one off in the config:
 
@@ -295,6 +296,12 @@ beets-importer doctor --linter empty_dirs,untracked_dirs
 # Paths for one linter, e.g. to remove empty folders
 beets-importer doctor --linter empty_dirs --paths --print0 | xargs -0 rmdir
 ```
+
+### Duplicate Unicode names
+
+A name like "gehört" can be stored with "ö" as one code point (NFC) or as "o" plus a combining mark (NFD). macOS used to write NFD. Linux tools such as torrent clients write NFC. If a Linux tool writes a file next to an NFD copy from a Mac, the folder ends up with both. Over SMB, macOS lists both entries but can only open one of them, so beets reports extra "unmatched tracks".
+
+`duplicate_names` finds these folders. The fix has to run on the file server, where the two names are really different. The Mac cannot tell which copy it is deleting.
 
 ### Flags
 
