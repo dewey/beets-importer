@@ -32,7 +32,7 @@ type Config struct {
 	DB        string       `yaml:"db"`
 	Source    string       `yaml:"source"`
 	Beet      string       `yaml:"beet"`
-	ImportLog string       `yaml:"import_log"`
+	StateFile string       `yaml:"state_file"`
 	Verbose   bool         `yaml:"verbose"`
 	NoCache   bool         `yaml:"no_cache"`
 	Doctor    DoctorConfig `yaml:"doctor"`
@@ -65,7 +65,7 @@ func Load(path string) (cfg Config, found bool, err error) {
 	cfg.DB = ExpandPath(cfg.DB)
 	cfg.Source = ExpandPath(cfg.Source)
 	cfg.Beet = ExpandPath(cfg.Beet)
-	cfg.ImportLog = ExpandPath(cfg.ImportLog)
+	cfg.StateFile = ExpandPath(cfg.StateFile)
 	return cfg, true, nil
 }
 

@@ -56,7 +56,7 @@ func runConfigShow(_ *cobra.Command, _ []string) error {
 		{"db", cfg.DB, true},
 		{"source", cfg.Source, true},
 		{"beet", cfg.Beet, true},
-		{"import_log", cfg.ImportLog, false},
+		{"state_file", cfg.StateFile, false},
 		{"verbose", fmt.Sprint(cfg.Verbose), false},
 		{"no_cache", fmt.Sprint(cfg.NoCache), false},
 	}

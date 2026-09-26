@@ -17,13 +17,13 @@
 # See https://github.com/dewey/beets-importer#beet-wrapper-script
 # beet: /opt/homebrew/bin/beet
 #
+# beets incremental state file, needed by 'import'. It lists every folder beets
+# already processed, so 'import' can leave them out. Requires 'incremental: yes'
+# in your beets config. It is state.pickle in your beets config directory.
+# state_file: ~/.config/beets/state.pickle
+#
 # ── Optional ──────────────────────────────────────────────────────────────────
 # Leave these commented out to use the defaults.
-#
-# Import log file written by beet import. When set, albums that appear in the
-# log are skipped by 'import' without needing a library DB lookup.
-# If not set, deduplication relies solely on the library database.
-# import_log: ~/Music/Music Library Beets/Library/import_log.txt
 #
 # Print a warning for every directory that could not be scanned, instead of
 # showing a single summary count at the end. (default: false)

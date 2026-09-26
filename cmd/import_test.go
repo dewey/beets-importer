@@ -85,66 +85,6 @@ func TestReadPathsFromFile_empty(t *testing.T) {
 	}
 }
 
-// --- readImportLog ---
-
-func TestReadImportLog_missingFile(t *testing.T) {
-	lines := readImportLog("/nonexistent/path/to/log.txt")
-	if lines != nil {
-		t.Errorf("expected nil for missing file, got %v", lines)
-	}
-}
-
-func TestReadImportLog_readsLines(t *testing.T) {
-	f, err := os.CreateTemp(t.TempDir(), "log")
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.WriteString("/music/Artist - Album\n/music/Another - One\n")
-	f.Close()
-
-	lines := readImportLog(f.Name())
-	if len(lines) != 2 {
-		t.Fatalf("expected 2 lines, got %d", len(lines))
-	}
-	if lines[0] != "/music/Artist - Album" {
-		t.Errorf("unexpected line 0: %q", lines[0])
-	}
-}
-
-// --- inLog ---
-
-func TestInLog_found(t *testing.T) {
-	lines := []string{
-		"/Volumes/Archive/music/Burial - Untrue",
-		"/Volumes/Archive/music/Coldplay - Parachutes",
-	}
-	if !inLog("Burial - Untrue", lines) {
-		t.Error("expected Burial - Untrue to be found in log")
-	}
-}
-
-func TestInLog_notFound(t *testing.T) {
-	lines := []string{"/Volumes/Archive/music/Coldplay - Parachutes"}
-	if inLog("Burial - Untrue", lines) {
-		t.Error("expected Burial - Untrue NOT to be found in log")
-	}
-}
-
-func TestInLog_emptyLog(t *testing.T) {
-	if inLog("anything", nil) {
-		t.Error("expected false for empty log")
-	}
-}
-
-func TestInLog_partialMatchDoesNotFire(t *testing.T) {
-	// "Burial" should not match a dir named "Burial - Untrue" if lines only contain "Burial"
-	// (needle is "/" + dirName, so partial prefix doesn't count)
-	lines := []string{"/Volumes/Archive/music/Burial"}
-	if inLog("Burial - Untrue", lines) {
-		t.Error("partial dir name should not match")
-	}
-}
-
 // --- listDirsByMtime ---
 
 func TestListDirsByMtime_sortedNewestFirst(t *testing.T) {

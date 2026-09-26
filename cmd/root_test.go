@@ -10,11 +10,11 @@ import (
 // newTestFlagSet creates a pflag.FlagSet that mirrors the persistent flags
 // registered on rootCmd, but with isolated variables so tests don't interfere
 // with the real command tree.
-func newTestFlagSet() (pf *pflag.FlagSet, db, source, beet, log *string, verbose, noCache *bool) {
+func newTestFlagSet() (pf *pflag.FlagSet, db, source, beet, state *string, verbose, noCache *bool) {
 	db = new(string)
 	source = new(string)
 	beet = new(string)
-	log = new(string)
+	state = new(string)
 	verbose = new(bool)
 	noCache = new(bool)
 
@@ -22,20 +22,20 @@ func newTestFlagSet() (pf *pflag.FlagSet, db, source, beet, log *string, verbose
 	pf.StringVar(db, "db", "", "")
 	pf.StringVar(source, "source", "", "")
 	pf.StringVar(beet, "beet", "", "")
-	pf.StringVar(log, "import-log", "", "")
+	pf.StringVar(state, "state-file", "", "")
 	pf.BoolVar(verbose, "verbose", false, "")
 	pf.BoolVar(noCache, "no-cache", false, "")
 	return
 }
 
 func TestApplyConfigToFlags_appliesWhenNotChanged(t *testing.T) {
-	pf, db, source, beet, log, verbose, noCache := newTestFlagSet()
+	pf, db, source, beet, state, verbose, noCache := newTestFlagSet()
 
 	cfg := config.Config{
 		DB:        "/config/db.db",
 		Source:    "/config/source",
 		Beet:      "/config/beet",
-		ImportLog: "/config/import.log",
+		StateFile: "/config/state.pickle",
 		Verbose:   true,
 		NoCache:   true,
 	}
@@ -50,8 +50,8 @@ func TestApplyConfigToFlags_appliesWhenNotChanged(t *testing.T) {
 	if *beet != "/config/beet" {
 		t.Errorf("beet = %q, want /config/beet", *beet)
 	}
-	if *log != "/config/import.log" {
-		t.Errorf("log = %q, want /config/import.log", *log)
+	if *state != "/config/state.pickle" {
+		t.Errorf("state = %q, want /config/state.pickle", *state)
 	}
 	if !*verbose {
 		t.Error("verbose should be true")

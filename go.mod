@@ -8,6 +8,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/agnivade/levenshtein v1.2.1
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
+	github.com/nlpodyssey/gopickle v0.3.0
 	github.com/olekukonko/tablewriter v1.1.5
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10

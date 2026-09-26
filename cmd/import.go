@@ -15,17 +15,17 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/dewey/beets-importer/internal/beets"
-	"github.com/dewey/beets-importer/internal/matcher"
 	"github.com/dewey/beets-importer/internal/picker"
 	"github.com/dewey/beets-importer/internal/source"
 	"github.com/spf13/cobra"
+	"golang.org/x/text/unicode/norm"
 )
 
 var (
-	flagImportFile      string
-	flagImportLimit     int
-	flagImportSince     string
-	flagImportThreshold float64
+	flagImportFile     string
+	flagImportLimit    int
+	flagImportSince    string
+	flagImportReimport bool
 )
 
 var importCmd = &cobra.Command{
@@ -35,22 +35,20 @@ var importCmd = &cobra.Command{
 }
 
 func init() {
-	addDBFlag(importCmd)
 	addSourceFlag(importCmd)
 	addBeetFlag(importCmd)
 	addScanFlags(importCmd)
-	importCmd.Flags().StringVar(&flagImportLog, "import-log", "",
-		"Path to the beets import log; albums listed there are skipped")
+	importCmd.Flags().StringVar(&flagStateFile, "state-file", "",
+		"Path to the beets incremental state file (state.pickle); folders beets already processed are skipped")
 	importCmd.Flags().StringVar(&flagImportFile, "from-file", "",
 		"Import the album paths in this file instead of opening the picker")
 	importCmd.Flags().IntVar(&flagImportLimit, "limit", 0,
 		"Maximum number of albums to process (0 = no limit)")
 	importCmd.Flags().StringVar(&flagImportSince, "since", "",
 		"Only show albums added on or after this date (YYYY-MM-DD)")
-	importCmd.Flags().Float64Var(&flagImportThreshold, "threshold", 0.85,
-		"Match confidence above which an album is considered already imported")
+	importCmd.Flags().BoolVar(&flagImportReimport, "reimport", false,
+		"Also list folders beets already processed, and run beet with --noincremental so it imports them again")
 	importCmd.MarkFlagsMutuallyExclusive("from-file", "since")
-	importCmd.MarkFlagsMutuallyExclusive("from-file", "threshold")
 }
 
 func runImport(_ *cobra.Command, _ []string) error {
@@ -61,13 +59,13 @@ func runImport(_ *cobra.Command, _ []string) error {
 }
 
 func runImportLatest() error {
-	if err := requireFlag("db", flagDB); err != nil {
-		return err
-	}
 	if err := requireFlag("source", flagSource); err != nil {
 		return err
 	}
 	if err := requireFlag("beet", flagBeet); err != nil {
+		return err
+	}
+	if err := requireFlag("state-file", flagStateFile); err != nil {
 		return err
 	}
 
@@ -80,24 +78,14 @@ func runImportLatest() error {
 		since = t
 	}
 
-	var spinMsg atomic.Value
-
-	spinMsg.Store("Loading beets library…")
-	stop := startSpinner(&spinMsg)
-	libraryAlbums, err := beets.LoadAlbums(flagDB)
-	stop()
+	processed, err := beets.ProcessedPaths(flagStateFile)
 	if err != nil {
-		return fmt.Errorf("load beets library: %w", err)
+		return err
 	}
-	fmt.Fprintf(os.Stderr, "%s %s\n",
-		styleFound.Render("✓"),
-		styleLabel.Render(fmt.Sprintf("%d albums in library", len(libraryAlbums))),
-	)
 
-	logEntries := readImportLog(flagImportLog)
-
+	var spinMsg atomic.Value
 	spinMsg.Store("Listing source directory…")
-	stop = startSpinner(&spinMsg)
+	stop := startSpinner(&spinMsg)
 	dirs, err := listDirsByMtime(flagSource)
 	stop()
 	if err != nil {
@@ -127,15 +115,12 @@ func runImportLatest() error {
 		if !since.IsZero() && d.mtime.Before(since) {
 			continue
 		}
-		if inLog(d.name, logEntries) {
+		dirPath := filepath.Join(flagSource, d.name)
+		if !flagImportReimport && processed[norm.NFC.String(dirPath)] {
 			continue
 		}
-		dirPath := filepath.Join(flagSource, d.name)
 		album, ok, err := source.QuickScanDir(dirPath, d.name, scanCache, d.mtime)
 		if err != nil || !ok {
-			continue
-		}
-		if matches := matcher.FindMatches([]source.Album{album}, libraryAlbums, flagImportThreshold); len(matches) > 0 {
 			continue
 		}
 		candidates = append(candidates, album)
@@ -146,12 +131,12 @@ func runImportLatest() error {
 	stop()
 
 	if len(candidates) == 0 {
-		fmt.Fprintln(os.Stderr, "No unimported albums found.")
+		fmt.Fprintln(os.Stderr, "No unprocessed albums found.")
 		return nil
 	}
 	fmt.Fprintf(os.Stderr, "%s %s\n\n",
 		styleFound.Render("✓"),
-		styleLabel.Render(fmt.Sprintf("%d unimported albums", len(candidates))),
+		styleLabel.Render(fmt.Sprintf("%d unprocessed albums", len(candidates))),
 	)
 
 	p := tea.NewProgram(picker.New(candidates))
@@ -173,7 +158,7 @@ func runImportLatest() error {
 	fmt.Println()
 	for i, item := range selected {
 		fmt.Printf("==> [%d/%d] %s\n", i+1, len(selected), item.Name)
-		if err := runBeetImport(item.Path); err != nil {
+		if err := runBeetImport(importArgs(item.Path)...); err != nil {
 			return fmt.Errorf("import stopped: %w", err)
 		}
 		exec.Command("pkill", "-TERM", "fpcalc").Run() //nolint:errcheck
@@ -212,28 +197,11 @@ func listDirsByMtime(root string) ([]dirInfo, error) {
 	return dirs, nil
 }
 
-func readImportLog(path string) []string {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil
+func importArgs(path string) []string {
+	if flagImportReimport {
+		return []string{"--noincremental", path}
 	}
-	defer f.Close()
-	var lines []string
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		lines = append(lines, sc.Text())
-	}
-	return lines
-}
-
-func inLog(dirName string, logLines []string) bool {
-	needle := "/" + dirName
-	for _, line := range logLines {
-		if strings.Contains(line, needle) {
-			return true
-		}
-	}
-	return false
+	return []string{path}
 }
 
 // readPathsFromFile reads album paths from r.
@@ -324,7 +292,7 @@ func runImportFromFile() error {
 
 	for i, path := range paths {
 		fmt.Printf("==> [%d/%d] %s\n", i+1, len(paths), filepath.Base(path))
-		if err := runBeetImport(path); err != nil {
+		if err := runBeetImport(importArgs(path)...); err != nil {
 			return fmt.Errorf("import stopped: %w", err)
 		}
 		exec.Command("pkill", "-TERM", "fpcalc").Run() //nolint:errcheck

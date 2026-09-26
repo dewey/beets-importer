@@ -57,7 +57,7 @@ func TestLoad_validYAML(t *testing.T) {
 db: /some/db.db
 source: /some/source
 beet: /usr/local/bin/beet
-import_log: /some/import.log
+state_file: /some/state.pickle
 verbose: true
 no_cache: true
 `)
@@ -77,8 +77,8 @@ no_cache: true
 	if cfg.Beet != "/usr/local/bin/beet" {
 		t.Errorf("Beet = %q, want /usr/local/bin/beet", cfg.Beet)
 	}
-	if cfg.ImportLog != "/some/import.log" {
-		t.Errorf("ImportLog = %q, want /some/import.log", cfg.ImportLog)
+	if cfg.StateFile != "/some/state.pickle" {
+		t.Errorf("StateFile = %q, want /some/state.pickle", cfg.StateFile)
 	}
 	if !cfg.Verbose {
 		t.Error("Verbose should be true")
@@ -150,7 +150,7 @@ func TestLoad_commentedOutValues(t *testing.T) {
 		t.Fatal("expected found=true")
 	}
 	// All values should be zero — template is fully commented out.
-	if cfg.DB != "" || cfg.Source != "" || cfg.Beet != "" || cfg.ImportLog != "" {
+	if cfg.DB != "" || cfg.Source != "" || cfg.Beet != "" || cfg.StateFile != "" {
 		t.Errorf("expected all-zero Config from template, got %+v", cfg)
 	}
 }

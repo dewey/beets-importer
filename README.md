@@ -119,10 +119,10 @@ Each command only accepts the flags it uses. Path flags have no built-in default
 | Flag | Config key | Commands | Description |
 |---|---|---|---|
 | `--config` | | all | Path to config file (default: `~/.config/beets-importer/config.yaml`) |
-| `--db` | `db` | import, upgrades, doctor | Path to beets SQLite database |
+| `--db` | `db` | upgrades, doctor | Path to beets SQLite database |
 | `--source` | `source` | import, upgrades | Download folder to scan for new albums |
 | `--beet` | `beet` | import, upgrades, doctor | Path to beet binary or wrapper script |
-| `--import-log` | `import_log` | import | Path to beets import log (optional) |
+| `--state-file` | `state_file` | import | Path to beets incremental state file (`state.pickle`) |
 | `--verbose` | `verbose` | import, upgrades | Print per-directory warnings during scanning instead of a summary count |
 | `--no-cache` | `no_cache` | import, upgrades | Disable the source directory scan cache and force a full re-scan |
 
@@ -232,7 +232,7 @@ beets-importer import --limit 20
 beets-importer import --since 2024-01-01
 ```
 
-An album is considered already imported if it appears in the beets import log (`--import-log`) or if the library contains a high-confidence match (controlled by `--threshold`).
+Folders that beets has already processed (applied or skipped) are left out. The list comes from the beets incremental state file (`--state-file`), so beets must run with `incremental: yes`. Paths are compared exactly, so running `import --limit 5` twice shows the next 5 folders once you processed the first ones. Pass `--reimport` to list those folders too. It also runs `beet import --noincremental`, because beets would skip them otherwise.
 
 ### `--from-file`: import from a text file
 
@@ -253,7 +253,7 @@ beets-importer import --from-file /tmp/my-list.txt --limit 5
 | `--from-file` | — | Import the paths in this file instead of opening the picker |
 | `--limit` | 0 | Maximum number of albums to process (0 = no limit) |
 | `--since` | — | Only show albums added on or after this date (YYYY-MM-DD); not with `--from-file` |
-| `--threshold` | 0.85 | Similarity above which an album is considered already imported; not with `--from-file` |
+| `--reimport` | false | Also list folders beets already processed and import them again with `--noincremental` |
 
 ---
 

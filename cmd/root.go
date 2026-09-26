@@ -20,7 +20,7 @@ var (
 	flagDB        string
 	flagSource    string
 	flagBeet      string
-	flagImportLog string
+	flagStateFile string
 	flagVerbose   bool
 	flagNoCache   bool
 	flagConfig    string
@@ -126,7 +126,7 @@ func applyConfigToFlags(cfg config.Config, fs *pflag.FlagSet) {
 		{"db", cfg.DB},
 		{"source", cfg.Source},
 		{"beet", cfg.Beet},
-		{"import-log", cfg.ImportLog},
+		{"state-file", cfg.StateFile},
 		{"verbose", boolFlag(cfg.Verbose)},
 		{"no-cache", boolFlag(cfg.NoCache)},
 	}
@@ -193,9 +193,9 @@ func startSpinner(msg *atomic.Value) func() {
 	}
 }
 
-// runBeetImport shells out to beet for a single album path, wiring stdin to
+// runBeetImport shells out to 'beet import' with args, wiring stdin to
 // /dev/tty so beets can prompt interactively.
-func runBeetImport(path string) error {
+func runBeetImport(args ...string) error {
 	if _, err := os.Stat(flagBeet); err != nil {
 		return fmt.Errorf("beet binary not found at %q: set the correct path with --beet or in the config file", flagBeet)
 	}
@@ -205,7 +205,7 @@ func runBeetImport(path string) error {
 	} else {
 		defer tty.Close()
 	}
-	cmd := exec.Command(flagBeet, "import", path)
+	cmd := exec.Command(flagBeet, append([]string{"import"}, args...)...)
 	cmd.Stdin = tty
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
