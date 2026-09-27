@@ -158,3 +158,19 @@ func TestListDirsByMtime_emptyDir(t *testing.T) {
 		t.Errorf("expected 0 dirs, got %d", len(dirs))
 	}
 }
+
+func TestReadAlbumIDs(t *testing.T) {
+	ids, err := readAlbumIDs(strings.NewReader("248\n\n# split albums\n 782 \n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 2 || ids[0] != 248 || ids[1] != 782 {
+		t.Errorf("ids = %v, want [248 782]", ids)
+	}
+}
+
+func TestReadAlbumIDsRejectsPaths(t *testing.T) {
+	if _, err := readAlbumIDs(strings.NewReader("248\n/music/Album A\n")); err == nil {
+		t.Error("expected error for a path in an ID list")
+	}
+}

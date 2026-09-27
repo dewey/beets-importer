@@ -25,6 +25,7 @@ var (
 	flagDoctorJSON    bool
 	flagDoctorLinters []string
 	flagDoctorPaths   bool
+	flagDoctorIDs     bool
 	flagDoctorPrint0  bool
 )
 
@@ -49,6 +50,9 @@ func init() {
 		"Run only these linters, comma-separated (e.g. empty_dirs,missing_year)")
 	doctorCmd.Flags().BoolVar(&flagDoctorPaths, "paths", false,
 		"Print only the issue paths of the selected linters, one per line (requires --linter)")
+	doctorCmd.Flags().BoolVar(&flagDoctorIDs, "ids", false,
+		"Print only the beets album IDs of the selected linters, one per line (requires --linter)")
+	doctorCmd.MarkFlagsMutuallyExclusive("paths", "ids")
 	doctorCmd.Flags().BoolVarP(&flagDoctorPrint0, "print0", "0", false,
 		"With --paths, separate paths with NUL instead of newline (for xargs -0)")
 }
@@ -414,6 +418,8 @@ func buildSpecs(albums []beets.Album, items []beets.Item, libraryRoot, sourceRoo
 		{Linter: linters.NewLowercaseMetadata(items)},
 		{Linter: linters.NewMissingArtwork(albums)},
 		{Linter: linters.NewMissingYear(albums)},
+		{Linter: linters.NewSplitAlbums(albums, items)},
+		{Linter: linters.NewArtistVariants(albums)},
 		{Linter: linters.NewDuplicateNames(libraryRoot, sourceRoot)},
 	}
 	for i := range specs {
@@ -465,6 +471,9 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 	if flagDoctorPaths && len(flagDoctorLinters) == 0 {
 		return fmt.Errorf("--paths requires --linter (e.g. --linter empty_dirs)")
 	}
+	if flagDoctorIDs && len(flagDoctorLinters) == 0 {
+		return fmt.Errorf("--ids requires --linter (e.g. --linter split_albums)")
+	}
 	if _, err := selectSpecs(buildSpecs(nil, nil, "", "", loadedConfig.Doctor), flagDoctorLinters); err != nil {
 		return err
 	}
@@ -473,7 +482,7 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if flagDoctorPaths || flagDoctorJSON {
+	if flagDoctorPaths || flagDoctorIDs || flagDoctorJSON {
 		return runDoctorHeadless(flagDB, library, flagSource)
 	}
 
@@ -503,6 +512,7 @@ type jsonLinter struct {
 
 type jsonIssue struct {
 	Path        string `json:"path"`
+	AlbumID     int    `json:"album_id,omitempty"`
 	Description string `json:"description"`
 	Severity    string `json:"severity"`
 }
@@ -538,32 +548,69 @@ func runDoctorHeadless(dbPath, libraryRoot, sourceRoot string) error {
 	if flagDoctorPaths {
 		return printDoctorPaths(specs, byName)
 	}
+	if flagDoctorIDs {
+		return printDoctorIDs(specs, byName)
+	}
 	return printDoctorJSON(specs, byName, libraryRoot)
 }
 
 // printDoctorPaths writes one issue path per line (or NUL-separated with
-// --print0). A skipped or failed linter is an error so callers see a non-zero
-// exit instead of silently empty output.
+// --print0).
 func printDoctorPaths(specs []doctor.Spec, byName map[string]doctor.Result) error {
 	sep := byte('\n')
 	if flagDoctorPrint0 {
 		sep = 0
 	}
+	issues, err := headlessIssues(specs, byName)
+	if err != nil {
+		return err
+	}
 	w := bufio.NewWriter(os.Stdout)
+	for _, iss := range issues {
+		w.WriteString(iss.Path)
+		w.WriteByte(sep)
+	}
+	return w.Flush()
+}
+
+// printDoctorIDs writes each album ID once, so the output can be passed to
+// 'import --library --from-file'.
+func printDoctorIDs(specs []doctor.Spec, byName map[string]doctor.Result) error {
+	issues, err := headlessIssues(specs, byName)
+	if err != nil {
+		return err
+	}
+	seen := make(map[int]bool)
+	w := bufio.NewWriter(os.Stdout)
+	for _, iss := range issues {
+		if iss.AlbumID == 0 {
+			return fmt.Errorf("%s: issue has no album ID, --ids only works with album linters", iss.Path)
+		}
+		if seen[iss.AlbumID] {
+			continue
+		}
+		seen[iss.AlbumID] = true
+		fmt.Fprintln(w, iss.AlbumID)
+	}
+	return w.Flush()
+}
+
+// headlessIssues returns the issues of all specs in spec order. A skipped or
+// failed linter is an error so callers see a non-zero exit instead of
+// silently empty output.
+func headlessIssues(specs []doctor.Spec, byName map[string]doctor.Result) ([]doctor.Issue, error) {
+	var issues []doctor.Issue
 	for _, s := range specs {
 		r := byName[s.Linter.Name()]
 		if r.Skipped {
-			return fmt.Errorf("linter %q was skipped: %s", r.LinterName, r.SkipReason)
+			return nil, fmt.Errorf("linter %q was skipped: %s", r.LinterName, r.SkipReason)
 		}
 		if r.Err != nil {
-			return fmt.Errorf("linter %q failed: %w", r.LinterName, r.Err)
+			return nil, fmt.Errorf("linter %q failed: %w", r.LinterName, r.Err)
 		}
-		for _, iss := range r.Issues {
-			w.WriteString(iss.Path)
-			w.WriteByte(sep)
-		}
+		issues = append(issues, r.Issues...)
 	}
-	return w.Flush()
+	return issues, nil
 }
 
 // printDoctorJSON writes the full report in spec order so output is stable.
@@ -592,6 +639,7 @@ func printDoctorJSON(specs []doctor.Spec, byName map[string]doctor.Result, libra
 			}
 			jl.Issues = append(jl.Issues, jsonIssue{
 				Path:        iss.Path,
+				AlbumID:     iss.AlbumID,
 				Description: iss.Description,
 				Severity:    string(iss.Severity),
 			})

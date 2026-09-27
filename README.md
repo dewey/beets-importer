@@ -2,9 +2,9 @@
 
 A CLI tool for [beets](https://beets.readthedocs.io) that helps with two things:
 
-- **`import`**: pick recently-added albums from your download folder and import them interactively, or import from a text file of paths
+- **`import`**: pick recently-added albums from your download folder and import them interactively, import from a text file of paths, or retag library albums from a list of album IDs
 - **`upgrades`**: scan your download folder, match albums against your library, and surface upgrade candidates: better format (e.g. FLAC replacing MP3) or higher bitrate
-- **`doctor`**: check your beets library for problems such as empty or untracked folders, low bitrate files, and missing artwork or years
+- **`doctor`**: check your beets library for problems such as empty or untracked folders, low bitrate files, missing artwork or years, and artists spelled in different ways
 
 ## Screenshots
 
@@ -119,7 +119,7 @@ Each command only accepts the flags it uses. Path flags have no built-in default
 | Flag | Config key | Commands | Description |
 |---|---|---|---|
 | `--config` | | all | Path to config file (default: `~/.config/beets-importer/config.yaml`) |
-| `--db` | `db` | upgrades, doctor | Path to beets SQLite database |
+| `--db` | `db` | import, upgrades, doctor | Path to beets SQLite database |
 | `--source` | `source` | import, upgrades, doctor | Download folder to scan for new albums |
 | `--beet` | `beet` | import, upgrades, doctor | Path to beet binary or wrapper script |
 | `--state-file` | `state_file` | import | Path to beets incremental state file (`state.pickle`) |
@@ -246,11 +246,27 @@ beets-importer import --from-file /tmp/upgrades.csv
 beets-importer import --from-file /tmp/my-list.txt --limit 5
 ```
 
+### `--library`: retag albums from a list of album IDs
+
+Runs `beet import -L` for each beets album ID in a file, one ID per line. Lines starting with `#` and blank lines are ignored. Use it to fix albums that are already in the library, for example artist names spelled in different ways.
+
+```sh
+# Retag the next 10 albums from the list
+beets-importer import --from-file split-albums.txt --library --limit 10
+```
+
+Every album gets the flexible field `retagged` set to today's date (`beet import --set`). Run the same command again to get the next 10. Albums you skip at the beets prompt are not marked, so they come back next time. When beets applies a match it gives the album a new ID, so IDs that are no longer in the library also count as done. To see what was retagged:
+
+```sh
+beet ls -a retagged:2026-09-27
+```
+
 ### Flags
 
 | Flag | Default | Description |
 |---|---|---|
 | `--from-file` | — | Import the paths in this file instead of opening the picker |
+| `--library` | false | Read beets album IDs from `--from-file` and retag them with `beet import -L`; needs `--db` |
 | `--limit` | 0 | Maximum number of albums to process (0 = no limit) |
 | `--since` | — | Only show albums added on or after this date (YYYY-MM-DD); not with `--from-file` |
 | `--reimport` | false | Also list folders beets already processed and import them again with `--noincremental` |
@@ -271,6 +287,8 @@ Runs a set of linters against your beets library and shows the results in a scro
 | `lowercase_metadata` | no | Tracks where artist, album and title are all lowercase |
 | `missing_artwork` | no | Albums without an art path |
 | `missing_year` | no | Albums without a year |
+| `split_albums` | no | Albums whose tracks disagree on album artist, album name or MusicBrainz album ID, or disagree with the album itself. Navidrome and other players show these twice |
+| `artist_variants` | no | Albums whose album artist is written differently elsewhere ("Lady GaGa" and "Lady Gaga"), or has the same name with a missing or different artist ID. The spelling used on albums with a MusicBrainz artist ID is taken as correct. "Various Artists" is skipped |
 | `duplicate_names` | yes | Folders holding two entries with the same name in different Unicode forms (NFC and NFD). Also walks `--source` |
 
 All linters run by default. Turn one off in the config:
@@ -295,6 +313,10 @@ beets-importer doctor --linter empty_dirs,untracked_dirs
 
 # Paths for one linter, e.g. to remove empty folders
 beets-importer doctor --linter empty_dirs --paths --print0 | xargs -0 rmdir
+
+# Album IDs for one linter, then retag them 10 at a time
+beets-importer doctor --linter split_albums --ids > split-albums.txt
+beets-importer import --from-file split-albums.txt --library --limit 10
 ```
 
 ### Duplicate Unicode names
@@ -310,4 +332,5 @@ A name like "gehört" can be stored with "ö" as one code point (NFC) or as "o" 
 | `--json` | false | Print results as JSON instead of the interactive view |
 | `--linter` | — | Run only these linters, comma-separated |
 | `--paths` | false | Print only issue paths of the selected linters, one per line (requires `--linter`) |
+| `--ids` | false | Print only the beets album IDs of the selected linters, one per line, for `import --library` (requires `--linter`; album linters only) |
 | `--print0`, `-0` | false | With `--paths`, separate paths with NUL (for `xargs -0`) |

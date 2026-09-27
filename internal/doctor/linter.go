@@ -16,6 +16,7 @@ const (
 // Issue is a single problem found by a linter.
 type Issue struct {
 	Path        string
+	AlbumID     int // set by linters that check beets albums, 0 otherwise
 	Description string
 	Severity    Severity
 }

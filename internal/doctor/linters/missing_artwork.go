@@ -29,6 +29,7 @@ func (l *MissingArtwork) Run(ctx context.Context) ([]doctor.Issue, error) {
 		if !a.HasArtwork {
 			issues = append(issues, doctor.Issue{
 				Path:        a.Path,
+				AlbumID:     a.ID,
 				Description: fmt.Sprintf("%s — %s: no artwork", a.AlbumArtist, a.Album),
 				Severity:    doctor.SeverityWarning,
 			})

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -26,15 +27,21 @@ var (
 	flagImportLimit    int
 	flagImportSince    string
 	flagImportReimport bool
+	flagImportLibrary  bool
 )
+
+// retagField is the flexible field set on every album retagged with
+// --library. beets keeps it, so progress survives between runs.
+const retagField = "retagged"
 
 var importCmd = &cobra.Command{
 	Use:   "import",
-	Short: "Pick recently added unimported albums and import them, or import from a file of paths",
+	Short: "Pick recently added unimported albums and import them, or import from a file of paths or album IDs",
 	RunE:  runImport,
 }
 
 func init() {
+	addDBFlag(importCmd)
 	addSourceFlag(importCmd)
 	addBeetFlag(importCmd)
 	addScanFlags(importCmd)
@@ -48,10 +55,16 @@ func init() {
 		"Only show albums added on or after this date (YYYY-MM-DD)")
 	importCmd.Flags().BoolVar(&flagImportReimport, "reimport", false,
 		"Also list folders beets already processed, and run beet with --noincremental so it imports them again")
+	importCmd.Flags().BoolVar(&flagImportLibrary, "library", false,
+		"Read beets album IDs from --from-file and retag them with 'beet import -L'")
 	importCmd.MarkFlagsMutuallyExclusive("from-file", "since")
+	importCmd.MarkFlagsMutuallyExclusive("library", "reimport")
 }
 
 func runImport(_ *cobra.Command, _ []string) error {
+	if flagImportLibrary {
+		return runRetagFromFile()
+	}
 	if flagImportFile != "" {
 		return runImportFromFile()
 	}
@@ -293,6 +306,74 @@ func runImportFromFile() error {
 	for i, path := range paths {
 		fmt.Printf("==> [%d/%d] %s\n", i+1, len(paths), filepath.Base(path))
 		if err := runBeetImport(importArgs(path)...); err != nil {
+			return fmt.Errorf("import stopped: %w", err)
+		}
+		exec.Command("pkill", "-TERM", "fpcalc").Run() //nolint:errcheck
+	}
+	return nil
+}
+
+// readAlbumIDs reads one beets album ID per line. Empty lines and lines
+// starting with "#" are skipped, like in path lists.
+func readAlbumIDs(r io.Reader) ([]int, error) {
+	var ids []int
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		id, err := strconv.Atoi(line)
+		if err != nil {
+			return nil, fmt.Errorf("not an album ID: %q", line)
+		}
+		ids = append(ids, id)
+	}
+	return ids, sc.Err()
+}
+
+func runRetagFromFile() error {
+	if flagImportFile == "" {
+		return fmt.Errorf("--library needs --from-file with a list of album IDs")
+	}
+	if err := requireFlag("db", flagDB); err != nil {
+		return err
+	}
+	if err := requireFlag("beet", flagBeet); err != nil {
+		return err
+	}
+
+	f, err := os.Open(flagImportFile)
+	if err != nil {
+		return fmt.Errorf("open %s: %w", flagImportFile, err)
+	}
+	defer f.Close()
+
+	ids, err := readAlbumIDs(f)
+	if err != nil {
+		return fmt.Errorf("%s: %w", flagImportFile, err)
+	}
+	albums, err := beets.UnmarkedAlbums(flagDB, retagField, ids)
+	if err != nil {
+		return err
+	}
+	if len(albums) == 0 {
+		fmt.Fprintf(os.Stderr, "All %d albums in the list are retagged.\n", len(ids))
+		return nil
+	}
+	fmt.Fprintf(os.Stderr, "%s %s\n\n",
+		styleFound.Render("✓"),
+		styleLabel.Render(fmt.Sprintf("%d of %d albums left to retag", len(albums), len(ids))),
+	)
+
+	if flagImportLimit > 0 && len(albums) > flagImportLimit {
+		albums = albums[:flagImportLimit]
+	}
+
+	mark := retagField + "=" + time.Now().Format("2006-01-02")
+	for i, a := range albums {
+		fmt.Printf("==> [%d/%d] %s - %s (id %d)\n", i+1, len(albums), a.AlbumArtist, a.Album, a.ID)
+		if err := runBeetImport("-L", "--set", mark, fmt.Sprintf("id:%d", a.ID)); err != nil {
 			return fmt.Errorf("import stopped: %w", err)
 		}
 		exec.Command("pkill", "-TERM", "fpcalc").Run() //nolint:errcheck

@@ -29,6 +29,7 @@ func (l *MissingYear) Run(ctx context.Context) ([]doctor.Issue, error) {
 		if a.Year == 0 {
 			issues = append(issues, doctor.Issue{
 				Path:        a.Path,
+				AlbumID:     a.ID,
 				Description: fmt.Sprintf("%s — %s: year not set", a.AlbumArtist, a.Album),
 				Severity:    doctor.SeverityWarning,
 			})
