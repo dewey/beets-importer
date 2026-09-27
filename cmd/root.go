@@ -98,6 +98,7 @@ func init() {
 	rootCmd.AddCommand(importCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(maintenanceCmd)
 }
 
 // Path flags have no defaults, so a wrong path is never used silently. They
@@ -193,9 +194,14 @@ func startSpinner(msg *atomic.Value) func() {
 	}
 }
 
-// runBeetImport shells out to 'beet import' with args, wiring stdin to
-// /dev/tty so beets can prompt interactively.
+// runBeetImport shells out to 'beet import' with args.
 func runBeetImport(args ...string) error {
+	return runBeet(append([]string{"import"}, args...)...)
+}
+
+// runBeet shells out to beet with args, wiring stdin to /dev/tty so beets
+// can prompt interactively.
+func runBeet(args ...string) error {
 	if _, err := os.Stat(flagBeet); err != nil {
 		return fmt.Errorf("beet binary not found at %q: set the correct path with --beet or in the config file", flagBeet)
 	}
@@ -205,7 +211,7 @@ func runBeetImport(args ...string) error {
 	} else {
 		defer tty.Close()
 	}
-	cmd := exec.Command(flagBeet, append([]string{"import"}, args...)...)
+	cmd := exec.Command(flagBeet, args...)
 	cmd.Stdin = tty
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

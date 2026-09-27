@@ -26,16 +26,43 @@ type DoctorConfig struct {
 	Linters map[string]bool `yaml:"linters"`
 }
 
+// IgnoreConfig lists albums that no command suggests or checks.
+type IgnoreConfig struct {
+	// Albums are album names, compared without case, like "! random !".
+	Albums []string `yaml:"albums"`
+}
+
+// Album reports whether an album with this name is ignored.
+func (c IgnoreConfig) Album(name string) bool {
+	for _, a := range c.Albums {
+		if strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(name)) {
+			return true
+		}
+	}
+	return false
+}
+
+// NavidromeConfig holds the login for 'import --from-playlist'.
+type NavidromeConfig struct {
+	URL      string `yaml:"url"`
+	Username string `yaml:"username"`
+	// PasswordCommand prints the password, e.g. "op read op://Private/Navidrome/password",
+	// so the password is never stored in the config file.
+	PasswordCommand string `yaml:"password_command"`
+}
+
 // Config holds settings loaded from the config file.
 // Keys use underscores to follow YAML convention; flag names use hyphens.
 type Config struct {
-	DB        string       `yaml:"db"`
-	Source    string       `yaml:"source"`
-	Beet      string       `yaml:"beet"`
-	StateFile string       `yaml:"state_file"`
-	Verbose   bool         `yaml:"verbose"`
-	NoCache   bool         `yaml:"no_cache"`
-	Doctor    DoctorConfig `yaml:"doctor"`
+	DB        string          `yaml:"db"`
+	Source    string          `yaml:"source"`
+	Beet      string          `yaml:"beet"`
+	StateFile string          `yaml:"state_file"`
+	Verbose   bool            `yaml:"verbose"`
+	NoCache   bool            `yaml:"no_cache"`
+	Doctor    DoctorConfig    `yaml:"doctor"`
+	Ignore    IgnoreConfig    `yaml:"ignore"`
+	Navidrome NavidromeConfig `yaml:"navidrome"`
 }
 
 // DefaultPath returns the default config file location for the current OS.

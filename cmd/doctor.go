@@ -86,7 +86,7 @@ type doctorModel struct {
 	dbPath      string
 	libraryRoot string
 	sourceRoot  string
-	cfg         config.DoctorConfig
+	cfg         config.Config
 	specs       []doctor.Spec
 
 	totalLinters int
@@ -102,7 +102,7 @@ type doctorModel struct {
 	err error
 }
 
-func newDoctorModel(dbPath, libraryRoot, sourceRoot string, cfg config.DoctorConfig) doctorModel {
+func newDoctorModel(dbPath, libraryRoot, sourceRoot string, cfg config.Config) doctorModel {
 	s := spinner.New()
 	s.Spinner = spinner.Spinner{Frames: spinnerFrames, FPS: time.Second / 12}
 	return doctorModel{
@@ -406,31 +406,56 @@ func renderIssueGroup(b *strings.Builder, r doctor.Result, width int) {
 	b.WriteString("\n")
 }
 
-func buildSpecs(albums []beets.Album, items []beets.Item, libraryRoot, sourceRoot string, cfg config.DoctorConfig) []doctor.Spec {
-	thresholdBps := cfg.LowQualityThresholdKbps * 1000
+func buildSpecs(albums []beets.Album, items []beets.Item, libraryRoot, sourceRoot string, cfg config.Config) []doctor.Spec {
+	thresholdBps := cfg.Doctor.LowQualityThresholdKbps * 1000
 	if thresholdBps == 0 {
 		thresholdBps = 128_000
 	}
+	keptAlbums := ignoreAlbums(albums, cfg.Ignore)
+	keptItems := ignoreItems(items, cfg.Ignore)
 	specs := []doctor.Spec{
 		{Linter: linters.NewEmptyDirs(libraryRoot)},
+		// Gets all tracks, so folders of ignored albums do not show up as untracked.
 		{Linter: linters.NewUntrackedDirs(libraryRoot, items)},
-		{Linter: linters.NewLowQuality(items, thresholdBps)},
-		{Linter: linters.NewLowercaseMetadata(items)},
-		{Linter: linters.NewMissingArtwork(albums)},
-		{Linter: linters.NewMissingYear(albums)},
-		{Linter: linters.NewSplitAlbums(albums, items)},
-		{Linter: linters.NewArtistVariants(albums)},
+		{Linter: linters.NewLowQuality(keptItems, thresholdBps)},
+		{Linter: linters.NewLowercaseMetadata(keptItems)},
+		{Linter: linters.NewProtectedAudio(keptItems)},
+		{Linter: linters.NewMissingArtwork(keptAlbums)},
+		{Linter: linters.NewMissingYear(keptAlbums)},
+		{Linter: linters.NewSplitAlbums(keptAlbums, keptItems)},
+		{Linter: linters.NewSplitImports(keptAlbums, keptItems)},
+		{Linter: linters.NewArtistVariants(keptAlbums)},
 		{Linter: linters.NewDuplicateNames(libraryRoot, sourceRoot)},
 	}
 	for i := range specs {
 		name := specs[i].Linter.Name()
-		if enabled, ok := cfg.Linters[name]; ok && !enabled {
+		if enabled, ok := cfg.Doctor.Linters[name]; ok && !enabled {
 			specs[i].SkipReason = "disabled"
 			continue
 		}
 		specs[i].Enabled = true
 	}
 	return specs
+}
+
+func ignoreAlbums(albums []beets.Album, ignore config.IgnoreConfig) []beets.Album {
+	var kept []beets.Album
+	for _, a := range albums {
+		if !ignore.Album(a.Album) {
+			kept = append(kept, a)
+		}
+	}
+	return kept
+}
+
+func ignoreItems(items []beets.Item, ignore config.IgnoreConfig) []beets.Item {
+	var kept []beets.Item
+	for _, it := range items {
+		if !ignore.Album(it.Album) {
+			kept = append(kept, it)
+		}
+	}
+	return kept
 }
 
 // selectSpecs keeps the specs named in names, in spec order. Empty names keeps all.
@@ -474,7 +499,12 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 	if flagDoctorIDs && len(flagDoctorLinters) == 0 {
 		return fmt.Errorf("--ids requires --linter (e.g. --linter split_albums)")
 	}
-	if _, err := selectSpecs(buildSpecs(nil, nil, "", "", loadedConfig.Doctor), flagDoctorLinters); err != nil {
+	for _, n := range flagDoctorLinters {
+		if flagDoctorIDs && folderLinters[n] {
+			return fmt.Errorf("--ids does not work with %s, it reports folders; use --paths", n)
+		}
+	}
+	if _, err := selectSpecs(buildSpecs(nil, nil, "", "", loadedConfig), flagDoctorLinters); err != nil {
 		return err
 	}
 	library, err := beets.LibraryDir(flagBeet)
@@ -486,7 +516,7 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 		return runDoctorHeadless(flagDB, library, flagSource)
 	}
 
-	final, err := tea.NewProgram(newDoctorModel(flagDB, library, flagSource, loadedConfig.Doctor)).Run()
+	final, err := tea.NewProgram(newDoctorModel(flagDB, library, flagSource, loadedConfig)).Run()
 	if err != nil {
 		return fmt.Errorf("tui: %w", err)
 	}
@@ -535,7 +565,7 @@ func runDoctorHeadless(dbPath, libraryRoot, sourceRoot string) error {
 		return fmt.Errorf("loading items: %w", err)
 	}
 
-	specs, err := selectSpecs(buildSpecs(albums, items, libraryRoot, sourceRoot, loadedConfig.Doctor), flagDoctorLinters)
+	specs, err := selectSpecs(buildSpecs(albums, items, libraryRoot, sourceRoot, loadedConfig), flagDoctorLinters)
 	if err != nil {
 		return err
 	}
@@ -581,16 +611,21 @@ func printDoctorIDs(specs []doctor.Spec, byName map[string]doctor.Result) error 
 		return err
 	}
 	seen := make(map[int]bool)
+	singletons := 0
 	w := bufio.NewWriter(os.Stdout)
 	for _, iss := range issues {
 		if iss.AlbumID == 0 {
-			return fmt.Errorf("%s: issue has no album ID, --ids only works with album linters", iss.Path)
+			singletons++
+			continue
 		}
 		if seen[iss.AlbumID] {
 			continue
 		}
 		seen[iss.AlbumID] = true
 		fmt.Fprintln(w, iss.AlbumID)
+	}
+	if singletons > 0 {
+		fmt.Fprintf(os.Stderr, "Skipped %d tracks that are not in an album.\n", singletons)
 	}
 	return w.Flush()
 }

@@ -188,7 +188,7 @@ func TestNewFromItems(t *testing.T) {
 		{Name: "A", Path: "/music/a", Line1: "Artist A — Album A", Line2: "FLAC  2010"},
 		{Name: "B", Path: "/music/b", Line1: "Artist B — Album B", Line2: "MP3  2005"},
 	}
-	m := NewFromItems(items)
+	m := NewFromItems("Select albums to import", items)
 	if len(m.items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(m.items))
 	}
@@ -205,7 +205,7 @@ func TestNewFromItems_selectedReturnsSamePaths(t *testing.T) {
 		{Name: "A", Path: "/music/a", Line1: "A"},
 		{Name: "B", Path: "/music/b", Line1: "B"},
 	}
-	m := NewFromItems(items)
+	m := NewFromItems("Select albums to import", items)
 	m = sendKey(m, " ") // select item 0
 	sel := m.Selected()
 	if len(sel) != 1 || sel[0].Path != "/music/a" {
@@ -354,7 +354,7 @@ func TestInspect_sourcePath(t *testing.T) {
 	items := []Item{
 		{Name: "A", Path: "/music/source/A", LibraryPath: "/music/library/A", Line1: "A"},
 	}
-	m := NewFromItems(items)
+	m := NewFromItems("Select albums to import", items)
 	m = sendKey(m, "i")
 	if m.inspect == nil {
 		t.Fatal("modal should be open")
@@ -371,7 +371,7 @@ func TestInspect_noLibraryPath(t *testing.T) {
 	items := []Item{
 		{Name: "A", Path: "/music/source/A", Line1: "A"},
 	}
-	m := NewFromItems(items)
+	m := NewFromItems("Select albums to import", items)
 	m = sendKey(m, "i")
 	if m.inspect == nil {
 		t.Fatal("modal should open even without a library path")
@@ -396,7 +396,7 @@ func TestInspect_viewRendersWithoutPanic(t *testing.T) {
 	items := []Item{
 		{Name: "A", Path: "/music/source/A", LibraryPath: "/music/library/A", Line1: "A"},
 	}
-	m := NewFromItems(items)
+	m := NewFromItems("Select albums to import", items)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = next.(Model)
 	m = sendKey(m, "i")
@@ -517,4 +517,22 @@ func containsSubstring(s, sub string) bool {
 			}
 			return false
 		}())
+}
+
+func TestDisabledItemsCannotBeSelected(t *testing.T) {
+	items := []Item{
+		{Key: "split_imports", Line1: "Split Imports — 147 albums"},
+		{Key: "missing_year", Line1: "Missing Year — nothing to do", Disabled: true},
+	}
+	m := NewFromItems("Select checks to fix", items)
+	m = sendKey(m, "j")
+	m = sendKey(m, " ")
+	if len(m.Selected()) != 0 {
+		t.Errorf("space selected a disabled item: %v", m.Selected())
+	}
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
+	m = next.(Model)
+	if sel := m.Selected(); len(sel) != 1 || sel[0].Key != "split_imports" {
+		t.Errorf("ctrl+a selected %v, want only split_imports", sel)
+	}
 }

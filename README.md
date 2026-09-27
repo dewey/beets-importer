@@ -4,6 +4,7 @@ A CLI tool for [beets](https://beets.readthedocs.io) that helps with two things:
 
 - **`import`**: pick recently-added albums from your download folder and import them interactively, import from a text file of paths, or retag library albums from a list of album IDs
 - **`upgrades`**: scan your download folder, match albums against your library, and surface upgrade candidates: better format (e.g. FLAC replacing MP3) or higher bitrate
+- **`maintenance`**: run the doctor linters and fix what they find as a queue: retag, fetch artwork, import untracked folders, remove empty folders
 - **`doctor`**: check your beets library for problems such as empty or untracked folders, low bitrate files, missing artwork or years, and artists spelled in different ways
 
 ## Screenshots
@@ -110,6 +111,16 @@ If you manage beets with [uv](https://docs.astral.sh/uv/) and a project-local co
 #!/bin/bash
 DIR="$(dirname "$(realpath "$0")")"
 exec uv run --project "$DIR" beet -c "$DIR/plugins/config.yaml" "$@"
+```
+
+### Ignoring albums
+
+List album names under `ignore.albums` to leave them out everywhere: the import picker, `import --library`, `upgrades`, and the doctor linters that read the beets database. Names are compared without case. `untracked_dirs` still counts their tracks, so their folders are not reported as untracked.
+
+```yaml
+ignore:
+  albums:
+    - "! random !"
 ```
 
 ## Shared flags
@@ -255,10 +266,32 @@ Runs `beet import -L` for each beets album ID in a file, one ID per line. Lines 
 beets-importer import --from-file split-albums.txt --library --limit 10
 ```
 
-Every album gets the flexible field `retagged` set to today's date (`beet import --set`). Run the same command again to get the next 10. Albums you skip at the beets prompt are not marked, so they come back next time. When beets applies a match it gives the album a new ID, so IDs that are no longer in the library also count as done. To see what was retagged:
+Albums are retagged in batches of 20, one `beet import -L` call per batch, so beets looks up the next albums while you decide on the current one. The albums of each batch are listed with their IDs before it starts. Every album gets the flexible field `retagged` set to today's date (`beet import --set`). Albums you skip at the beets prompt get `retag_skipped` instead, read from the beets import log. Run the same command again to get the next 10: albums with either field are left out. When beets applies a match it gives the album a new ID, so IDs that are no longer in the library also count as done. If beets ends before it applied or skipped some albums of a batch, after aBort or after "Merge all" on a duplicate, those albums are not marked and you are asked whether to go on.
 
 ```sh
+# What was retagged or skipped
 beet ls -a retagged:2026-09-27
+beet ls -a retag_skipped::.
+
+# Offer a skipped album again
+beet modify -a id:1234 retag_skipped!
+```
+
+### `--from-playlist`: retag the albums in a Navidrome playlist
+
+With `--library`, `--from-playlist` takes the album IDs from a Navidrome playlist instead of a file: every album that has a track in the playlist is retagged once. The playlist ID is the last part of the playlist URL, e.g. `1LWVZhA0vqU46FAJmzEzWG` in `https://music.example.com/app/#/playlist/1LWVZhA0vqU46FAJmzEzWG/show`.
+
+```sh
+beets-importer import --library --from-playlist 1LWVZhA0vqU46FAJmzEzWG --limit 10
+```
+
+Tracks are matched by file path, so Navidrome's music folder must be the same folder as beets' `directory:`. Tracks that beets does not know are listed. That happens when beets moved files and Navidrome has not scanned since, or when a folder is not in beets at all (see `doctor --linter untracked_dirs`). It needs the `navidrome` section in the config:
+
+```yaml
+navidrome:
+  url: https://music.example.com
+  username: me
+  password_command: op read op://Private/Navidrome/password
 ```
 
 ### Flags
@@ -266,10 +299,43 @@ beet ls -a retagged:2026-09-27
 | Flag | Default | Description |
 |---|---|---|
 | `--from-file` | — | Import the paths in this file instead of opening the picker |
-| `--library` | false | Read beets album IDs from `--from-file` and retag them with `beet import -L`; needs `--db` |
+| `--library` | false | Retag library albums with `beet import -L`; album IDs come from `--from-file` or `--from-playlist`; needs `--db` |
+| `--from-playlist` | — | With `--library`, retag the albums of this Navidrome playlist ID |
 | `--limit` | 0 | Maximum number of albums to process (0 = no limit) |
 | `--since` | — | Only show albums added on or after this date (YYYY-MM-DD); not with `--from-file` |
 | `--reimport` | false | Also list folders beets already processed and import them again with `--noincremental` |
+
+---
+
+## `maintenance`: fix what the linters find
+
+Runs the doctor linters, prints how many cases each one has, and lets you fix them as a queue:
+
+1. Pick linters with SPACE and press ENTER.
+2. For each linter, pick the cases to fix. CTRL+A selects all, I shows the folder.
+3. The fixes run one by one, like the import queue, and the run stops at the first error. Retags that follow each other run in batches of 20, like `import --library`.
+
+```sh
+beets-importer maintenance
+beets-importer maintenance --folders --limit 20
+```
+
+| Linter | Fix |
+|---|---|
+| `split_albums`, `artist_variants`, `missing_year`, `lowercase_metadata` | Retag the album with `beet import -L`, like `import --library`. Albums marked `retagged` or `retag_skipped` are hidden |
+| `split_imports` | Show the albums of the group and ask; on yes, merge them into one album (`beet modify album_id=…`, then remove the empty album rows), then retag it. After a skip the files are still gathered with `beet move` |
+| `missing_artwork` | `beet fetchart` for the album |
+| `untracked_dirs` | `beet import -m --noincremental` on the folder, which moves it into place |
+| `empty_dirs` | Remove the folder |
+| `protected_audio` | Delete the file with `beet remove -d`. The album goes away with its last track. Before a queue with deletions starts, you are asked once to confirm |
+| `low_quality`, `duplicate_names` | Report only. Use `upgrades`, or fix on the file server |
+
+Track linters are grouped by album, so an album with ten lowercase tracks is retagged once. An album found by two linters is also fixed once. There is nothing to save between runs: fixed cases are gone from the next run.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--folders` | false | Also run the linters that walk the library folder (`empty_dirs`, `untracked_dirs`, `duplicate_names`). They take minutes over a network share |
+| `--limit` | 0 | Maximum number of fixes to run (0 = no limit) |
 
 ---
 
@@ -285,8 +351,10 @@ Runs a set of linters against your beets library and shows the results in a scro
 | `untracked_dirs` | yes | Folders with audio files but no track in the beets database |
 | `low_quality` | no | Tracks below `doctor.low_quality_threshold_kbps` (default 128), and AAC below 256 kbps |
 | `lowercase_metadata` | no | Tracks where artist, album and title are all lowercase |
+| `protected_audio` | no | Tracks with iTunes FairPlay DRM (`.m4p`). Only iTunes can play them |
 | `missing_artwork` | no | Albums without an art path |
 | `missing_year` | no | Albums without a year |
+| `split_imports` | no | Albums that beets split into several albums on import: albums with the same name in one folder (e.g. split by featured artist, unless two tracks share a title, which means two copies), and one-track albums with the same album artist and name in different folders (a compilation imported track by track) |
 | `split_albums` | no | Albums whose tracks disagree on album artist, album name or MusicBrainz album ID, or disagree with the album itself. Navidrome and other players show these twice |
 | `artist_variants` | no | Albums whose album artist is written differently elsewhere ("Lady GaGa" and "Lady Gaga"), or has the same name with a missing or different artist ID. The spelling used on albums with a MusicBrainz artist ID is taken as correct. "Various Artists" is skipped |
 | `duplicate_names` | yes | Folders holding two entries with the same name in different Unicode forms (NFC and NFD). Also walks `--source` |
@@ -332,5 +400,5 @@ A name like "gehört" can be stored with "ö" as one code point (NFC) or as "o" 
 | `--json` | false | Print results as JSON instead of the interactive view |
 | `--linter` | — | Run only these linters, comma-separated |
 | `--paths` | false | Print only issue paths of the selected linters, one per line (requires `--linter`) |
-| `--ids` | false | Print only the beets album IDs of the selected linters, one per line, for `import --library` (requires `--linter`; album linters only) |
+| `--ids` | false | Print only the beets album IDs of the selected linters, one per line, for `import --library` (requires `--linter`; not for folder linters) |
 | `--print0`, `-0` | false | With `--paths`, separate paths with NUL (for `xargs -0`) |

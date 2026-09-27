@@ -46,5 +46,29 @@
 #   #   untracked_dirs: true
 #   #   low_quality: true
 #   #   lowercase_metadata: true
+#   #   protected_audio: true
 #   #   missing_artwork: true
 #   #   missing_year: true
+#   #   split_albums: true
+#   #   split_imports: true
+#   #   artist_variants: true
+#   #   duplicate_names: true
+#
+# ── Ignore ────────────────────────────────────────────────────────────────────
+# Albums that no command suggests or checks: the import picker, 'import
+# --library', 'upgrades' and the doctor linters that read the beets database.
+# Names are compared without case.
+#
+# ignore:
+#   albums:
+#     - "! random !"
+#
+# ── Navidrome ─────────────────────────────────────────────────────────────────
+# Needed by 'import --library --from-playlist'. Navidrome's music folder must
+# be the same folder as beets' 'directory:', so track paths line up.
+#
+# navidrome:
+#   url: https://music.example.com
+#   username: me
+#   # Command that prints the password, so it is not stored in this file.
+#   password_command: op read op://Private/Navidrome/password

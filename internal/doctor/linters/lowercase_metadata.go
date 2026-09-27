@@ -39,6 +39,7 @@ func (l *LowercaseMetadata) Run(ctx context.Context) ([]doctor.Issue, error) {
 		if isAllLowercase(item.Artist) && isAllLowercase(item.Album) && isAllLowercase(item.Title) {
 			issues = append(issues, doctor.Issue{
 				Path:        item.Path,
+				AlbumID:     item.AlbumID,
 				Description: fmt.Sprintf("%s: artist/album/title are all lowercase — likely old auto-tag", filepath.Base(item.Path)),
 				Severity:    doctor.SeverityWarning,
 			})

@@ -175,7 +175,11 @@ func (m upgradesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseDone
 			return m, tea.Quit
 		}
-		m.libraryAlbums = msg.albums
+		for _, a := range msg.albums {
+			if !loadedConfig.Ignore.Album(a.Album) {
+				m.libraryAlbums = append(m.libraryAlbums, a)
+			}
+		}
 		m.phase = phaseScanning
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -208,6 +212,9 @@ func (m upgradesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.scanDone = msg.done
 		m.scanTotal = msg.total
 		m.currentDir = msg.album.DirName
+		if loadedConfig.Ignore.Album(msg.album.Album) {
+			return m, readScanCh(m.scanCh)
+		}
 
 		matches := matcher.FindMatches([]source.Album{msg.album}, m.libraryAlbums, m.threshold)
 		for _, match := range matches {
@@ -461,7 +468,7 @@ func runUpgrades(_ *cobra.Command, _ []string) error {
 		for i, c := range result.candidates {
 			items[i] = buildPickerItem(c)
 		}
-		pp := tea.NewProgram(picker.NewFromItems(items))
+		pp := tea.NewProgram(picker.NewFromItems("Select albums to import", items))
 		finalModel, err := pp.Run()
 		if err != nil {
 			return fmt.Errorf("picker: %w", err)

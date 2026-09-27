@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dewey/beets-importer/internal/beets"
 )
 
 // --- readPathsFromFile ---
@@ -172,5 +174,35 @@ func TestReadAlbumIDs(t *testing.T) {
 func TestReadAlbumIDsRejectsPaths(t *testing.T) {
 	if _, err := readAlbumIDs(strings.NewReader("248\n/music/Album A\n")); err == nil {
 		t.Error("expected error for a path in an ID list")
+	}
+}
+
+func TestSortOutBatch(t *testing.T) {
+	log := "import started Sun Sep 27 18:00:00 2026\n" +
+		"skip /music/Kode9/Nothing [2015]\n" +
+		"asis /music/Burial/Untrue [2007]\n" +
+		"skip /music/Nas/Illmatic [1994]/CD1; /music/Nas/Illmatic [1994]/CD2\n"
+	skipped := skippedFolders(log)
+	if len(skipped) != 3 || !skipped["/music/Nas/Illmatic [1994]/CD2"] {
+		t.Fatalf("skipped = %v", skipped)
+	}
+
+	// 1 was applied and is gone. 2 and 4 were skipped, 4 is a multi-disc
+	// album. 3 was never reached.
+	left := []beets.LibraryAlbum{{ID: 2}, {ID: 3}, {ID: 4}}
+	folders := map[int][]string{
+		2: {"/music/Kode9/Nothing [2015]"},
+		3: {"/music/Björk/Post [1995]"},
+		4: {"/music/Nas/Illmatic [1994]/CD1", "/music/Nas/Illmatic [1994]/CD2"},
+	}
+	skipIDs, untouched := sortOutBatch(left, folders, skipped)
+	if len(skipIDs) != 2 || skipIDs[0] != 2 || skipIDs[1] != 4 {
+		t.Errorf("skipIDs = %v, want [2 4]", skipIDs)
+	}
+	if len(untouched) != 1 || untouched[0] != 3 {
+		t.Errorf("untouched = %v, want [3]", untouched)
+	}
+	if q := idQuery([]int{2, 4}); q != "id::^(2|4)$" {
+		t.Errorf("idQuery = %q", q)
 	}
 }

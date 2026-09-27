@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/dewey/beets-importer/internal/config"
 	"github.com/spf13/cobra"
@@ -70,6 +71,9 @@ func runConfigShow(_ *cobra.Command, _ []string) error {
 	sort.Strings(names)
 	for _, n := range names {
 		rows = append(rows, configRow{"doctor.linters." + n, fmt.Sprint(cfg.Doctor.Linters[n]), false})
+	}
+	if len(cfg.Ignore.Albums) > 0 {
+		rows = append(rows, configRow{"ignore.albums", strings.Join(cfg.Ignore.Albums, ", "), false})
 	}
 
 	w := os.Stdout

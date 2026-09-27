@@ -195,3 +195,17 @@ func writeFile(t *testing.T, content string) string {
 	}
 	return path
 }
+
+func TestIgnoreAlbum(t *testing.T) {
+	path := writeFile(t, "ignore:\n  albums:\n    - \"! random !\"\n")
+	cfg, _, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Ignore.Album("! Random ! ") {
+		t.Error("expected match without case and outer spaces")
+	}
+	if cfg.Ignore.Album("!random!") {
+		t.Error("only listed names should match")
+	}
+}

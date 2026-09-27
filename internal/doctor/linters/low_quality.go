@@ -39,12 +39,14 @@ func (l *LowQuality) Run(ctx context.Context) ([]doctor.Issue, error) {
 		case item.Bitrate < l.thresholdBps:
 			issues = append(issues, doctor.Issue{
 				Path:        item.Path,
+				AlbumID:     item.AlbumID,
 				Description: fmt.Sprintf("%s: %d kbps %s — below %d kbps threshold", name, item.Bitrate/1000, item.Format, l.thresholdBps/1000),
 				Severity:    doctor.SeverityWarning,
 			})
 		case (item.Format == "AAC" || item.Format == "MP4") && item.Bitrate < 256_000:
 			issues = append(issues, doctor.Issue{
 				Path:        item.Path,
+				AlbumID:     item.AlbumID,
 				Description: fmt.Sprintf("%s: %d kbps AAC — old AAC encoding, consider replacing with FLAC or 256 kbps+ AAC", name, item.Bitrate/1000),
 				Severity:    doctor.SeverityWarning,
 			})
