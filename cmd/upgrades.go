@@ -380,6 +380,11 @@ func runUpgrades(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
+	if flagUpgradesLimit > 0 && len(result.candidates) >= flagUpgradesLimit {
+		fmt.Fprintf(os.Stderr, "%s\n\n", styleDim.Render(fmt.Sprintf(
+			"(stopped after %d candidates — re-run without --limit to scan everything)", flagUpgradesLimit)))
+	}
+
 	// --output: write a CSV with all candidate details
 	if flagUpgradesOutput != "" {
 		f, err := os.Create(flagUpgradesOutput)
@@ -471,10 +476,6 @@ func runUpgrades(_ *cobra.Command, _ []string) error {
 			})
 		}
 		table.Render()
-
-		if flagUpgradesLimit > 0 && len(result.candidates) >= flagUpgradesLimit {
-			fmt.Printf("\n(stopped after %d candidates — re-run without --limit to scan everything)\n", flagUpgradesLimit)
-		}
 	}
 
 	if flagUpgradesInteractive {
