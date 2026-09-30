@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/dewey/beets-importer/internal/source"
 )
 
@@ -19,7 +19,7 @@ func albums(names ...string) []source.Album {
 }
 
 func sendKey(m Model, key string) Model {
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+	next, _ := m.Update(tea.KeyPressMsg{Code: []rune(key)[0], Text: key})
 	return next.(Model)
 }
 
@@ -99,7 +99,7 @@ func TestSelectAll_togglesAll(t *testing.T) {
 	m := New(albums("A", "B", "C"))
 
 	// ctrl+a selects all when none selected
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	m = next.(Model)
 	for i, item := range m.items {
 		if !item.selected {
@@ -108,7 +108,7 @@ func TestSelectAll_togglesAll(t *testing.T) {
 	}
 
 	// ctrl+a again deselects all
-	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	next, _ = m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	m = next.(Model)
 	for i, item := range m.items {
 		if item.selected {
@@ -122,7 +122,7 @@ func TestSelectAll_partialSelectsAll(t *testing.T) {
 	// Select only item 0
 	m = sendKey(m, " ")
 	// ctrl+a should select all (not deselect, since not all are selected)
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	m = next.(Model)
 	for i, item := range m.items {
 		if !item.selected {
@@ -136,7 +136,7 @@ func TestConfirm_enter(t *testing.T) {
 	if m.Confirmed {
 		t.Fatal("should not be confirmed initially")
 	}
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = next.(Model)
 	if !m.Confirmed {
 		t.Error("should be confirmed after enter")
@@ -147,25 +147,12 @@ func TestConfirm_enter(t *testing.T) {
 }
 
 func TestQuit_doesNotConfirm(t *testing.T) {
-	for _, key := range []string{"q", "esc"} {
+	for _, msg := range []tea.KeyPressMsg{{Code: 'q', Text: "q"}, {Code: tea.KeyEscape}} {
 		m := New(albums("A"))
-		var keyType tea.KeyType
-		switch key {
-		case "q":
-			keyType = tea.KeyRunes
-		case "esc":
-			keyType = tea.KeyEscape
-		}
-		var msg tea.KeyMsg
-		if keyType == tea.KeyRunes {
-			msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
-		} else {
-			msg = tea.KeyMsg{Type: keyType}
-		}
 		next, _ := m.Update(msg)
 		m = next.(Model)
 		if m.Confirmed {
-			t.Errorf("key %q should not confirm", key)
+			t.Errorf("key %q should not confirm", msg)
 		}
 	}
 }
@@ -201,7 +188,7 @@ func TestNewFromItems(t *testing.T) {
 		{Name: "A", Path: "/music/a", Line1: "Artist A — Album A", Line2: "FLAC  2010"},
 		{Name: "B", Path: "/music/b", Line1: "Artist B — Album B", Line2: "MP3  2005"},
 	}
-	m := NewFromItems(items)
+	m := NewFromItems("Select albums to import", items)
 	if len(m.items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(m.items))
 	}
@@ -218,7 +205,7 @@ func TestNewFromItems_selectedReturnsSamePaths(t *testing.T) {
 		{Name: "A", Path: "/music/a", Line1: "A"},
 		{Name: "B", Path: "/music/b", Line1: "B"},
 	}
-	m := NewFromItems(items)
+	m := NewFromItems("Select albums to import", items)
 	m = sendKey(m, " ") // select item 0
 	sel := m.Selected()
 	if len(sel) != 1 || sel[0].Path != "/music/a" {
@@ -239,7 +226,7 @@ func TestNew_emptyAlbums_navigationNoPanic(t *testing.T) {
 	m := New(nil)
 	// j/k/space on an empty list must not panic.
 	for _, key := range []string{"j", "k", " "} {
-		next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+		next, _ := m.Update(tea.KeyPressMsg{Code: []rune(key)[0], Text: key})
 		m = next.(Model)
 	}
 	if m.cursor != 0 {
@@ -306,7 +293,7 @@ func TestScrolling_offsetRetractsWhenCursorReturnsToTop(t *testing.T) {
 // ── Inspect modal ─────────────────────────────────────────────────────────────
 
 func sendEsc(m Model) (Model, tea.Cmd) {
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	return next.(Model), cmd
 }
 
@@ -367,7 +354,7 @@ func TestInspect_sourcePath(t *testing.T) {
 	items := []Item{
 		{Name: "A", Path: "/music/source/A", LibraryPath: "/music/library/A", Line1: "A"},
 	}
-	m := NewFromItems(items)
+	m := NewFromItems("Select albums to import", items)
 	m = sendKey(m, "i")
 	if m.inspect == nil {
 		t.Fatal("modal should be open")
@@ -384,7 +371,7 @@ func TestInspect_noLibraryPath(t *testing.T) {
 	items := []Item{
 		{Name: "A", Path: "/music/source/A", Line1: "A"},
 	}
-	m := NewFromItems(items)
+	m := NewFromItems("Select albums to import", items)
 	m = sendKey(m, "i")
 	if m.inspect == nil {
 		t.Fatal("modal should open even without a library path")
@@ -409,7 +396,7 @@ func TestInspect_viewRendersWithoutPanic(t *testing.T) {
 	items := []Item{
 		{Name: "A", Path: "/music/source/A", LibraryPath: "/music/library/A", Line1: "A"},
 	}
-	m := NewFromItems(items)
+	m := NewFromItems("Select albums to import", items)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = next.(Model)
 	m = sendKey(m, "i")
@@ -530,4 +517,22 @@ func containsSubstring(s, sub string) bool {
 			}
 			return false
 		}())
+}
+
+func TestDisabledItemsCannotBeSelected(t *testing.T) {
+	items := []Item{
+		{Key: "split_imports", Line1: "Split Imports — 147 albums"},
+		{Key: "missing_year", Line1: "Missing Year — nothing to do", Disabled: true},
+	}
+	m := NewFromItems("Select checks to fix", items)
+	m = sendKey(m, "j")
+	m = sendKey(m, " ")
+	if len(m.Selected()) != 0 {
+		t.Errorf("space selected a disabled item: %v", m.Selected())
+	}
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
+	m = next.(Model)
+	if sel := m.Selected(); len(sel) != 1 || sel[0].Key != "split_imports" {
+		t.Errorf("ctrl+a selected %v, want only split_imports", sel)
+	}
 }

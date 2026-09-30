@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/dewey/beets-importer/internal/config"
 	"github.com/spf13/cobra"
@@ -10,48 +12,74 @@ import (
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Show the effective configuration, creating a template if none exists",
-	RunE:  runConfig,
+	Short: "Create or show the config file",
 }
 
-func runConfig(_ *cobra.Command, _ []string) error {
-	// First run: config file doesn't exist yet — create a template and tell
-	// the user to edit it. Don't show the (empty) values table; it would only
-	// add noise before anything is configured.
+var configInitCmd = &cobra.Command{
+	Use:   "init",
+	Short: "Write an example config file to the config path",
+	Args:  cobra.NoArgs,
+	RunE:  runConfigInit,
+}
+
+var configShowCmd = &cobra.Command{
+	Use:   "show",
+	Short: "Show the values loaded from the config file",
+	Args:  cobra.NoArgs,
+	RunE:  runConfigShow,
+}
+
+func init() {
+	configCmd.AddCommand(configInitCmd, configShowCmd)
+}
+
+func runConfigInit(_ *cobra.Command, _ []string) error {
+	if err := config.WriteTemplate(loadedConfigPath); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "Wrote example config to:\n\n  %s\n\n", loadedConfigPath)
+	fmt.Fprintf(os.Stderr, "Fill in the required fields, then run 'beets-importer config show' to check it.\n")
+	return nil
+}
+
+type configRow struct {
+	key      string
+	val      string
+	required bool
+}
+
+func runConfigShow(_ *cobra.Command, _ []string) error {
 	if !loadedConfigFound {
-		if err := config.WriteTemplate(loadedConfigPath); err != nil {
-			return fmt.Errorf("creating config template: %w", err)
-		}
-		fmt.Fprintf(os.Stderr, "%s\n\n", styleHeader.Render("Welcome to beets-importer"))
-		fmt.Fprintf(os.Stderr, "No config file found. Copied example config to:\n\n")
-		fmt.Fprintf(os.Stderr, "  %s\n\n", loadedConfigPath)
-		fmt.Fprintf(os.Stderr, "Open that file, fill in your paths, then re-run this command to verify.\n")
-		fmt.Fprintf(os.Stderr, "Required fields are marked in the comments.\n")
-		return nil
+		return fmt.Errorf("no config file at %s: run 'beets-importer config init' to create one", loadedConfigPath)
+	}
+	cfg := loadedConfig
+	rows := []configRow{
+		{"db", cfg.DB, true},
+		{"source", cfg.Source, true},
+		{"beet", cfg.Beet, true},
+		{"state_file", cfg.StateFile, false},
+		{"verbose", fmt.Sprint(cfg.Verbose), false},
+		{"no_cache", fmt.Sprint(cfg.NoCache), false},
+	}
+	if cfg.Doctor.LowQualityThresholdKbps != 0 {
+		rows = append(rows, configRow{"doctor.low_quality_threshold_kbps", fmt.Sprint(cfg.Doctor.LowQualityThresholdKbps), false})
+	}
+	names := make([]string, 0, len(cfg.Doctor.Linters))
+	for n := range cfg.Doctor.Linters {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		rows = append(rows, configRow{"doctor.linters." + n, fmt.Sprint(cfg.Doctor.Linters[n]), false})
+	}
+	if len(cfg.Ignore.Albums) > 0 {
+		rows = append(rows, configRow{"ignore.albums", strings.Join(cfg.Ignore.Albums, ", "), false})
 	}
 
 	w := os.Stdout
-	fmt.Fprintln(w, styleHeader.Render("Effective Configuration"))
+	fmt.Fprintln(w, styleHeader.Render("Configuration"))
 	fmt.Fprintln(w)
-	fmt.Fprintf(w, "  %s  %s\n\n",
-		styleLabel.Render("config file:"),
-		styleDim.Render(loadedConfigPath),
-	)
-
-	type row struct {
-		flag     string
-		val      string
-		required bool
-	}
-	rows := []row{
-		{"db", flagDB, true},
-		{"source", flagSource, true},
-		{"beet", flagBeet, true},
-		{"log", flagLog, false},
-		{"verbose", fmt.Sprintf("%v", flagVerbose), false},
-		{"no-cache", fmt.Sprintf("%v", flagNoCache), false},
-	}
-
+	fmt.Fprintf(w, "  %s  %s\n\n", styleLabel.Render("config file:"), styleDim.Render(loadedConfigPath))
 	for _, r := range rows {
 		tag := styleDim.Render("optional")
 		if r.required {
@@ -61,16 +89,9 @@ func runConfig(_ *cobra.Command, _ []string) error {
 		if val == "" {
 			val = styleDim.Render("(not set)")
 		}
-		fmt.Fprintf(w, "  %s  %-16s  %s\n",
-			tag,
-			styleLabel.Render("--"+r.flag),
-			val,
-		)
+		fmt.Fprintf(w, "  %s  %-36s  %s\n", tag, styleLabel.Render(r.key), val)
 	}
-
 	fmt.Fprintln(w)
-	fmt.Fprintf(w, "  %s\n",
-		styleDim.Render("Edit the config file above to change persistent values, or pass --flags directly."),
-	)
+	fmt.Fprintf(w, "  %s\n", styleDim.Render("Flags passed on the command line override these values."))
 	return nil
 }

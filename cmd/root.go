@@ -14,22 +14,24 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// Persistent flags shared across subcommands.
+// Flags shared by several subcommands. Each subcommand registers only the ones
+// it uses, so --help lists only flags that matter.
 var (
-	flagDB      string
-	flagSource  string
-	flagBeet    string
-	flagLog     string
-	flagVerbose bool
-	flagNoCache bool
-	flagConfig  string
+	flagDB        string
+	flagSource    string
+	flagBeet      string
+	flagStateFile string
+	flagVerbose   bool
+	flagNoCache   bool
+	flagConfig    string
 )
 
-// loadedConfigPath and loadedConfigFound are set by PersistentPreRunE so
-// subcommands and the config subcommand can reference them.
+// loadedConfigPath, loadedConfigFound, and loadedConfig are set by
+// PersistentPreRunE so subcommands can reference them without re-parsing.
 var (
 	loadedConfigPath  string
 	loadedConfigFound bool
+	loadedConfig      config.Config
 )
 
 // Shared lipgloss styles used by both subcommands.
@@ -45,6 +47,8 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "beets-importer",
 	Short: "Import and upgrade your beets music library",
+	// Errors from RunE are about the input, not flag syntax, so the usage text is noise.
+	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Determine config path: explicit --config flag, or the OS default.
 		explicitConfig := cmd.Root().PersistentFlags().Changed("config")
@@ -70,64 +74,78 @@ var rootCmd = &cobra.Command{
 
 		loadedConfigPath = cfgPath
 		loadedConfigFound = found
+		loadedConfig = cfg
 
 		if found {
-			applyConfigToFlags(cfg, cmd.Root().PersistentFlags())
+			applyConfigToFlags(cfg, cmd.Flags())
 		}
 		return nil
 	},
 }
 
-func Execute() {
+func Execute(version string) {
+	rootCmd.Version = version
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
 
 func init() {
-	// No default values for path flags — users must configure them explicitly
-	// via --flag or the config file. This prevents silent use of wrong paths.
-	rootCmd.PersistentFlags().StringVar(&flagDB, "db", "",
-		"Path to beets SQLite database")
-	rootCmd.PersistentFlags().StringVar(&flagSource, "source", "",
-		"Source music directory to scan")
-	rootCmd.PersistentFlags().StringVar(&flagBeet, "beet", "",
-		"Path to beet binary or wrapper script")
-	rootCmd.PersistentFlags().StringVar(&flagLog, "log", "",
-		"Path to beets import log")
-	rootCmd.PersistentFlags().BoolVar(&flagVerbose, "verbose", false,
-		"Print detailed warnings during scanning")
-	rootCmd.PersistentFlags().BoolVar(&flagNoCache, "no-cache", false,
-		"Disable the source directory scan cache (forces a full re-scan)")
 	rootCmd.PersistentFlags().StringVar(&flagConfig, "config", "",
 		"Path to config file (default: ~/.config/beets-importer/config.yaml)")
 
 	rootCmd.AddCommand(upgradesCmd)
 	rootCmd.AddCommand(importCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(doctorCmd)
+	rootCmd.AddCommand(maintenanceCmd)
 }
 
-// applyConfigToFlags writes config file values into any persistent flags that
-// the user did not explicitly set on the command line. Using pf.Set() keeps the
-// flag's bound variable in sync and makes this function unit-testable with a
-// standalone pflag.FlagSet.
-func applyConfigToFlags(cfg config.Config, pf *pflag.FlagSet) {
-	for _, f := range []struct{ name, val string }{
+// Path flags have no defaults, so a wrong path is never used silently. They
+// must come from the config file or the command line.
+func addDBFlag(c *cobra.Command) {
+	c.Flags().StringVar(&flagDB, "db", "", "Path to beets SQLite database")
+}
+
+func addSourceFlag(c *cobra.Command) {
+	c.Flags().StringVar(&flagSource, "source", "", "Source music directory to scan")
+}
+
+func addBeetFlag(c *cobra.Command) {
+	c.Flags().StringVar(&flagBeet, "beet", "", "Path to beet binary or wrapper script")
+}
+
+func addScanFlags(c *cobra.Command) {
+	c.Flags().BoolVar(&flagVerbose, "verbose", false, "Print a warning for every directory that could not be scanned")
+	c.Flags().BoolVar(&flagNoCache, "no-cache", false, "Disable the source directory scan cache (forces a full re-scan)")
+}
+
+// applyConfigToFlags writes config file values into the flags the user did
+// not set on the command line. Flags the command does not have are skipped.
+func applyConfigToFlags(cfg config.Config, fs *pflag.FlagSet) {
+	vals := []struct{ name, val string }{
 		{"db", cfg.DB},
 		{"source", cfg.Source},
 		{"beet", cfg.Beet},
-		{"log", cfg.Log},
-	} {
-		if f.val != "" && !pf.Changed(f.name) {
-			_ = pf.Set(f.name, f.val)
+		{"state-file", cfg.StateFile},
+		{"verbose", boolFlag(cfg.Verbose)},
+		{"no-cache", boolFlag(cfg.NoCache)},
+	}
+	for _, v := range vals {
+		f := fs.Lookup(v.name)
+		if f == nil || f.Changed || v.val == "" {
+			continue
 		}
+		_ = fs.Set(v.name, v.val)
 	}
-	if cfg.Verbose && !pf.Changed("verbose") {
-		_ = pf.Set("verbose", "true")
+}
+
+// boolFlag returns "" for false so a false config value never overrides a flag.
+func boolFlag(b bool) string {
+	if b {
+		return "true"
 	}
-	if cfg.NoCache && !pf.Changed("no-cache") {
-		_ = pf.Set("no-cache", "true")
-	}
+	return ""
 }
 
 // requireFlag returns an error if val is empty, with a message pointing the
@@ -141,7 +159,7 @@ func requireFlag(name, val string) error {
 		hint = "~/.config/beets-importer/config.yaml"
 	}
 	return fmt.Errorf(
-		"--%s is not configured\n\nSet it with --%s /path/to/... or add it to:\n  %s\nRun 'beets-importer config' to see current settings, or --help for flag documentation",
+		"--%s is not configured\n\nSet it with --%s /path/to/... or add it to:\n  %s\nRun 'beets-importer config show' to see current settings, or --help for flag documentation",
 		name, name, hint,
 	)
 }
@@ -176,9 +194,14 @@ func startSpinner(msg *atomic.Value) func() {
 	}
 }
 
-// runBeetImport shells out to beet for a single album path, wiring stdin to
-// /dev/tty so beets can prompt interactively.
-func runBeetImport(path string) error {
+// runBeetImport shells out to 'beet import' with args.
+func runBeetImport(args ...string) error {
+	return runBeet(append([]string{"import"}, args...)...)
+}
+
+// runBeet shells out to beet with args, wiring stdin to /dev/tty so beets
+// can prompt interactively.
+func runBeet(args ...string) error {
 	if _, err := os.Stat(flagBeet); err != nil {
 		return fmt.Errorf("beet binary not found at %q: set the correct path with --beet or in the config file", flagBeet)
 	}
@@ -188,7 +211,7 @@ func runBeetImport(path string) error {
 	} else {
 		defer tty.Close()
 	}
-	cmd := exec.Command(flagBeet, "import", path)
+	cmd := exec.Command(flagBeet, args...)
 	cmd.Stdin = tty
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -201,6 +224,16 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return string(runes[:max-1]) + "…"
+}
+
+// truncateLeft truncates s from the left, keeping the tail, so that the most
+// specific (rightmost) portion of a file path remains visible.
+func truncateLeft(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return "…" + string(runes[len(runes)-max+1:])
 }
 
 func padRight(s string, width int) string {

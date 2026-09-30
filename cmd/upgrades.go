@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/dewey/beets-importer/internal/beets"
 	"github.com/dewey/beets-importer/internal/compare"
@@ -25,13 +25,13 @@ import (
 var (
 	flagUpgradesThreshold        float64
 	flagUpgradesMinBitrateDelta  int
-	flagUpgradesVerbose          bool
+	flagUpgradesAll              bool
 	flagUpgradesLimit            int
-	flagUpgradesOutputFile       string
+	flagUpgradesOutput           string
 	flagUpgradesRequireYearMatch bool
 	flagUpgradesLibraryFormat    []string
 	flagUpgradesSourceFormat     []string
-	flagUpgradesPick             bool
+	flagUpgradesInteractive      bool
 )
 
 var upgradesCmd = &cobra.Command{
@@ -41,15 +41,19 @@ var upgradesCmd = &cobra.Command{
 }
 
 func init() {
+	addDBFlag(upgradesCmd)
+	addSourceFlag(upgradesCmd)
+	addBeetFlag(upgradesCmd)
+	addScanFlags(upgradesCmd)
 	upgradesCmd.Flags().Float64Var(&flagUpgradesThreshold, "threshold", 0.70,
 		"Minimum match confidence (0..1) to consider a source→library pair")
 	upgradesCmd.Flags().IntVar(&flagUpgradesMinBitrateDelta, "min-bitrate-delta", 32,
 		"Minimum bitrate improvement in kbps to flag as an upgrade (same-format comparisons)")
-	upgradesCmd.Flags().BoolVarP(&flagUpgradesVerbose, "verbose", "v", false,
+	upgradesCmd.Flags().BoolVar(&flagUpgradesAll, "all", false,
 		"Show all matched pairs, not just upgrade candidates")
 	upgradesCmd.Flags().IntVar(&flagUpgradesLimit, "limit", 0,
 		"Stop after collecting this many upgrade candidates (0 = no limit)")
-	upgradesCmd.Flags().StringVar(&flagUpgradesOutputFile, "output-file", "",
+	upgradesCmd.Flags().StringVarP(&flagUpgradesOutput, "output", "o", "",
 		"Write source paths to this file instead of printing a table (pass to beets-importer import --from-file)")
 	upgradesCmd.Flags().BoolVar(&flagUpgradesRequireYearMatch, "require-year-match", false,
 		"Skip candidates where both source and library have a known year that differs")
@@ -57,7 +61,7 @@ func init() {
 		"Only show candidates where the library copy is one of these formats (e.g. MP3,AAC)")
 	upgradesCmd.Flags().StringSliceVar(&flagUpgradesSourceFormat, "source-format", nil,
 		"Only show candidates where the source copy is one of these formats (e.g. FLAC)")
-	upgradesCmd.Flags().BoolVar(&flagUpgradesPick, "pick", false,
+	upgradesCmd.Flags().BoolVarP(&flagUpgradesInteractive, "interactive", "i", false,
 		"After scanning, show an interactive picker to select candidates and import them")
 }
 
@@ -129,7 +133,7 @@ func newUpgradesModel(scanCache *source.ScanCache) upgradesModel {
 		phase:            phaseLoading,
 		threshold:        flagUpgradesThreshold,
 		minBitrate:       flagUpgradesMinBitrateDelta,
-		verbose:          flagUpgradesVerbose,
+		verbose:          flagUpgradesAll,
 		limit:            flagUpgradesLimit,
 		requireYearMatch: flagUpgradesRequireYearMatch,
 		libraryFormats:   upperAll(flagUpgradesLibraryFormat),
@@ -150,7 +154,7 @@ func (m upgradesModel) Init() tea.Cmd {
 
 func (m upgradesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if msg.String() == "ctrl+c" {
 			if m.cancelScan != nil {
 				m.cancelScan()
@@ -171,7 +175,11 @@ func (m upgradesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseDone
 			return m, tea.Quit
 		}
-		m.libraryAlbums = msg.albums
+		for _, a := range msg.albums {
+			if !loadedConfig.Ignore.Album(a.Album) {
+				m.libraryAlbums = append(m.libraryAlbums, a)
+			}
+		}
 		m.phase = phaseScanning
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -204,6 +212,9 @@ func (m upgradesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.scanDone = msg.done
 		m.scanTotal = msg.total
 		m.currentDir = msg.album.DirName
+		if loadedConfig.Ignore.Album(msg.album.Album) {
+			return m, readScanCh(m.scanCh)
+		}
 
 		matches := matcher.FindMatches([]source.Album{msg.album}, m.libraryAlbums, m.threshold)
 		for _, match := range matches {
@@ -245,7 +256,11 @@ func (m upgradesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m upgradesModel) View() string {
+func (m upgradesModel) View() tea.View {
+	return tea.NewView(m.render())
+}
+
+func (m upgradesModel) render() string {
 	spin := styleSpinner.Render(m.spinner.View())
 	switch m.phase {
 	case phaseLoading:
@@ -351,9 +366,9 @@ func runUpgrades(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	// --output-file: write a CSV with all candidate details
-	if flagUpgradesOutputFile != "" {
-		f, err := os.Create(flagUpgradesOutputFile)
+	// --output: write a CSV with all candidate details
+	if flagUpgradesOutput != "" {
+		f, err := os.Create(flagUpgradesOutput)
 		if err != nil {
 			return fmt.Errorf("create output file: %w", err)
 		}
@@ -396,12 +411,12 @@ func runUpgrades(_ *cobra.Command, _ []string) error {
 			return fmt.Errorf("writing CSV: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "%s Written %d candidates to %s\n",
-			styleFound.Render("✓"), len(result.candidates), flagUpgradesOutputFile)
+			styleFound.Render("✓"), len(result.candidates), flagUpgradesOutput)
 		return nil
 	}
 
-	// Render results table (skip when --pick is used; the picker shows its own summary).
-	if !flagUpgradesPick {
+	// The picker shows its own summary, so skip the table.
+	if !flagUpgradesInteractive {
 		fmt.Println(styleHeader.Render("Upgrade Candidates"))
 		fmt.Println(strings.Repeat("─", 100))
 
@@ -448,13 +463,12 @@ func runUpgrades(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	// --pick: show interactive picker then import selected candidates.
-	if flagUpgradesPick {
+	if flagUpgradesInteractive {
 		items := make([]picker.Item, len(result.candidates))
 		for i, c := range result.candidates {
 			items[i] = buildPickerItem(c)
 		}
-		pp := tea.NewProgram(picker.NewFromItems(items), tea.WithAltScreen())
+		pp := tea.NewProgram(picker.NewFromItems("Select albums to import", items))
 		finalModel, err := pp.Run()
 		if err != nil {
 			return fmt.Errorf("picker: %w", err)

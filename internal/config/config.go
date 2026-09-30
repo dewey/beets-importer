@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 //go:embed config.example.yaml
@@ -17,15 +17,52 @@ var templateBytes []byte
 // Exported so tests can verify the template parses as valid YAML.
 var Template = string(templateBytes)
 
+// DoctorConfig holds settings for the doctor command.
+type DoctorConfig struct {
+	// LowQualityThresholdKbps is the bitrate below which a track is flagged as
+	// low quality. Defaults to 128 kbps when unset.
+	LowQualityThresholdKbps int `yaml:"low_quality_threshold_kbps"`
+	// Linters turns individual linters off by name (e.g. "empty_dirs": false).
+	Linters map[string]bool `yaml:"linters"`
+}
+
+// IgnoreConfig lists albums that no command suggests or checks.
+type IgnoreConfig struct {
+	// Albums are album names, compared without case, like "! random !".
+	Albums []string `yaml:"albums"`
+}
+
+// Album reports whether an album with this name is ignored.
+func (c IgnoreConfig) Album(name string) bool {
+	for _, a := range c.Albums {
+		if strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(name)) {
+			return true
+		}
+	}
+	return false
+}
+
+// NavidromeConfig holds the login for 'import --from-playlist'.
+type NavidromeConfig struct {
+	URL      string `yaml:"url"`
+	Username string `yaml:"username"`
+	// PasswordCommand prints the password, e.g. "op read op://Private/Navidrome/password",
+	// so the password is never stored in the config file.
+	PasswordCommand string `yaml:"password_command"`
+}
+
 // Config holds settings loaded from the config file.
 // Keys use underscores to follow YAML convention; flag names use hyphens.
 type Config struct {
-	DB      string `yaml:"db"`
-	Source  string `yaml:"source"`
-	Beet    string `yaml:"beet"`
-	Log     string `yaml:"log"`
-	Verbose bool   `yaml:"verbose"`
-	NoCache bool   `yaml:"no_cache"`
+	DB        string          `yaml:"db"`
+	Source    string          `yaml:"source"`
+	Beet      string          `yaml:"beet"`
+	StateFile string          `yaml:"state_file"`
+	Verbose   bool            `yaml:"verbose"`
+	NoCache   bool            `yaml:"no_cache"`
+	Doctor    DoctorConfig    `yaml:"doctor"`
+	Ignore    IgnoreConfig    `yaml:"ignore"`
+	Navidrome NavidromeConfig `yaml:"navidrome"`
 }
 
 // DefaultPath returns the default config file location for the current OS.
@@ -55,7 +92,7 @@ func Load(path string) (cfg Config, found bool, err error) {
 	cfg.DB = ExpandPath(cfg.DB)
 	cfg.Source = ExpandPath(cfg.Source)
 	cfg.Beet = ExpandPath(cfg.Beet)
-	cfg.Log = ExpandPath(cfg.Log)
+	cfg.StateFile = ExpandPath(cfg.StateFile)
 	return cfg, true, nil
 }
 
@@ -78,7 +115,7 @@ func ExpandPath(path string) string {
 // parent directories as needed. It is a no-op if the file already exists.
 func WriteTemplate(path string) error {
 	if _, err := os.Stat(path); err == nil {
-		return nil // already exists
+		return fmt.Errorf("config file already exists: %s", path)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create config dir: %w", err)

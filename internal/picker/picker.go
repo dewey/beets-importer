@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/dewey/beets-importer/internal/source"
 )
@@ -31,6 +31,9 @@ type Item struct {
 	Line1       string // main display line shown in the picker
 	Line2       string // second display line shown below Line1 (optional)
 	Styled      bool   // if true, Line1/Line2 already contain ANSI codes; skip style wrapping
+	Key         string // caller data to find the item again after selection, not shown
+	Disabled    bool   // shown, but cannot be selected
+	Done        bool   // with Disabled: shows a green check instead of a dash, for "nothing to do"
 	selected    bool
 }
 
@@ -50,6 +53,7 @@ type inspectState struct {
 
 // Model is the bubbletea model for the multi-select album picker.
 type Model struct {
+	title        string
 	items        []Item
 	cursor       int
 	offset       int
@@ -82,13 +86,13 @@ func New(albums []source.Album) Model {
 			Line2: strings.Join(meta, "  "),
 		}
 	}
-	return Model{items: items, height: 20, width: 90}
+	return NewFromItems("Select albums to import", items)
 }
 
-// NewFromItems creates a Model from a pre-built slice of Items.
+// NewFromItems creates a Model with a header title from a pre-built slice of Items.
 // Use this when the caller needs full control over display text (e.g. upgrade candidates).
-func NewFromItems(items []Item) Model {
-	return Model{items: items, height: 20, width: 90}
+func NewFromItems(title string, items []Item) Model {
+	return Model{title: title, items: items, height: 20, width: 90}
 }
 
 func (m Model) Init() tea.Cmd { return nil }
@@ -105,7 +109,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.height = 3
 		}
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// When inspect modal is open, only ESC is handled (to close it).
 		if m.inspect != nil {
 			if msg.String() == "esc" {
@@ -138,8 +142,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case " ":
-			if len(m.items) > 0 {
+		case "space":
+			if len(m.items) > 0 && !m.items[m.cursor].Disabled {
 				m.items[m.cursor].selected = !m.items[m.cursor].selected
 			}
 
@@ -147,13 +151,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// If any item is unselected, select all. Otherwise deselect all.
 			allSelected := true
 			for _, item := range m.items {
-				if !item.selected {
+				if !item.selected && !item.Disabled {
 					allSelected = false
 					break
 				}
 			}
 			for i := range m.items {
-				m.items[i].selected = !allSelected
+				m.items[i].selected = !allSelected && !m.items[i].Disabled
 			}
 
 		case "i":
@@ -165,7 +169,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = true
+	return v
+}
+
+func (m Model) render() string {
 	base := m.viewList()
 	if m.inspect == nil {
 		return base
@@ -191,7 +201,7 @@ func (m Model) View() string {
 func (m Model) viewList() string {
 	var b strings.Builder
 
-	b.WriteString(styleHeader.Render("Select albums to import"))
+	b.WriteString(styleHeader.Render(m.title))
 	b.WriteString("  ")
 	b.WriteString(styleMeta.Render("SPACE toggle · CTRL+A all · I inspect · ENTER confirm · ESC cancel"))
 	b.WriteString("\n")
@@ -212,6 +222,14 @@ func (m Model) viewList() string {
 
 		check := styleNormal.Render("[ ]")
 		nameStyle := styleNormal
+		if item.Disabled {
+			// No brackets, so these never look like a selected row.
+			check = styleDim.Render(" - ")
+			if item.Done {
+				check = styleCheck.Render(" ✓ ")
+			}
+			nameStyle = styleDim
+		}
 		if item.selected {
 			check = styleCheck.Render("[✓]")
 			nameStyle = styleSelected

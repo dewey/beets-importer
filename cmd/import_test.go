@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dewey/beets-importer/internal/beets"
 )
 
 // --- readPathsFromFile ---
@@ -85,66 +87,6 @@ func TestReadPathsFromFile_empty(t *testing.T) {
 	}
 }
 
-// --- readImportLog ---
-
-func TestReadImportLog_missingFile(t *testing.T) {
-	lines := readImportLog("/nonexistent/path/to/log.txt")
-	if lines != nil {
-		t.Errorf("expected nil for missing file, got %v", lines)
-	}
-}
-
-func TestReadImportLog_readsLines(t *testing.T) {
-	f, err := os.CreateTemp(t.TempDir(), "log")
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.WriteString("/music/Artist - Album\n/music/Another - One\n")
-	f.Close()
-
-	lines := readImportLog(f.Name())
-	if len(lines) != 2 {
-		t.Fatalf("expected 2 lines, got %d", len(lines))
-	}
-	if lines[0] != "/music/Artist - Album" {
-		t.Errorf("unexpected line 0: %q", lines[0])
-	}
-}
-
-// --- inLog ---
-
-func TestInLog_found(t *testing.T) {
-	lines := []string{
-		"/Volumes/Archive/music/Burial - Untrue",
-		"/Volumes/Archive/music/Coldplay - Parachutes",
-	}
-	if !inLog("Burial - Untrue", lines) {
-		t.Error("expected Burial - Untrue to be found in log")
-	}
-}
-
-func TestInLog_notFound(t *testing.T) {
-	lines := []string{"/Volumes/Archive/music/Coldplay - Parachutes"}
-	if inLog("Burial - Untrue", lines) {
-		t.Error("expected Burial - Untrue NOT to be found in log")
-	}
-}
-
-func TestInLog_emptyLog(t *testing.T) {
-	if inLog("anything", nil) {
-		t.Error("expected false for empty log")
-	}
-}
-
-func TestInLog_partialMatchDoesNotFire(t *testing.T) {
-	// "Burial" should not match a dir named "Burial - Untrue" if lines only contain "Burial"
-	// (needle is "/" + dirName, so partial prefix doesn't count)
-	lines := []string{"/Volumes/Archive/music/Burial"}
-	if inLog("Burial - Untrue", lines) {
-		t.Error("partial dir name should not match")
-	}
-}
-
 // --- listDirsByMtime ---
 
 func TestListDirsByMtime_sortedNewestFirst(t *testing.T) {
@@ -216,5 +158,51 @@ func TestListDirsByMtime_emptyDir(t *testing.T) {
 	}
 	if len(dirs) != 0 {
 		t.Errorf("expected 0 dirs, got %d", len(dirs))
+	}
+}
+
+func TestReadAlbumIDs(t *testing.T) {
+	ids, err := readAlbumIDs(strings.NewReader("248\n\n# split albums\n 782 \n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 2 || ids[0] != 248 || ids[1] != 782 {
+		t.Errorf("ids = %v, want [248 782]", ids)
+	}
+}
+
+func TestReadAlbumIDsRejectsPaths(t *testing.T) {
+	if _, err := readAlbumIDs(strings.NewReader("248\n/music/Album A\n")); err == nil {
+		t.Error("expected error for a path in an ID list")
+	}
+}
+
+func TestSortOutBatch(t *testing.T) {
+	log := "import started Sun Sep 27 18:00:00 2026\n" +
+		"skip /music/Kode9/Nothing [2015]\n" +
+		"asis /music/Burial/Untrue [2007]\n" +
+		"skip /music/Nas/Illmatic [1994]/CD1; /music/Nas/Illmatic [1994]/CD2\n"
+	skipped := skippedFolders(log)
+	if len(skipped) != 3 || !skipped["/music/Nas/Illmatic [1994]/CD2"] {
+		t.Fatalf("skipped = %v", skipped)
+	}
+
+	// 1 was applied and is gone. 2 and 4 were skipped, 4 is a multi-disc
+	// album. 3 was never reached.
+	left := []beets.LibraryAlbum{{ID: 2}, {ID: 3}, {ID: 4}}
+	folders := map[int][]string{
+		2: {"/music/Kode9/Nothing [2015]"},
+		3: {"/music/Björk/Post [1995]"},
+		4: {"/music/Nas/Illmatic [1994]/CD1", "/music/Nas/Illmatic [1994]/CD2"},
+	}
+	skipIDs, untouched := sortOutBatch(left, folders, skipped)
+	if len(skipIDs) != 2 || skipIDs[0] != 2 || skipIDs[1] != 4 {
+		t.Errorf("skipIDs = %v, want [2 4]", skipIDs)
+	}
+	if len(untouched) != 1 || untouched[0] != 3 {
+		t.Errorf("untouched = %v, want [3]", untouched)
+	}
+	if q := idQuery([]int{2, 4}); q != "id::^(2|4)$" {
+		t.Errorf("idQuery = %q", q)
 	}
 }

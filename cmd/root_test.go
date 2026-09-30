@@ -10,11 +10,11 @@ import (
 // newTestFlagSet creates a pflag.FlagSet that mirrors the persistent flags
 // registered on rootCmd, but with isolated variables so tests don't interfere
 // with the real command tree.
-func newTestFlagSet() (pf *pflag.FlagSet, db, source, beet, log *string, verbose, noCache *bool) {
+func newTestFlagSet() (pf *pflag.FlagSet, db, source, beet, state *string, verbose, noCache *bool) {
 	db = new(string)
 	source = new(string)
 	beet = new(string)
-	log = new(string)
+	state = new(string)
 	verbose = new(bool)
 	noCache = new(bool)
 
@@ -22,22 +22,22 @@ func newTestFlagSet() (pf *pflag.FlagSet, db, source, beet, log *string, verbose
 	pf.StringVar(db, "db", "", "")
 	pf.StringVar(source, "source", "", "")
 	pf.StringVar(beet, "beet", "", "")
-	pf.StringVar(log, "log", "", "")
+	pf.StringVar(state, "state-file", "", "")
 	pf.BoolVar(verbose, "verbose", false, "")
 	pf.BoolVar(noCache, "no-cache", false, "")
 	return
 }
 
 func TestApplyConfigToFlags_appliesWhenNotChanged(t *testing.T) {
-	pf, db, source, beet, log, verbose, noCache := newTestFlagSet()
+	pf, db, source, beet, state, verbose, noCache := newTestFlagSet()
 
 	cfg := config.Config{
-		DB:      "/config/db.db",
-		Source:  "/config/source",
-		Beet:    "/config/beet",
-		Log:     "/config/import.log",
-		Verbose: true,
-		NoCache: true,
+		DB:        "/config/db.db",
+		Source:    "/config/source",
+		Beet:      "/config/beet",
+		StateFile: "/config/state.pickle",
+		Verbose:   true,
+		NoCache:   true,
 	}
 	applyConfigToFlags(cfg, pf)
 
@@ -50,8 +50,8 @@ func TestApplyConfigToFlags_appliesWhenNotChanged(t *testing.T) {
 	if *beet != "/config/beet" {
 		t.Errorf("beet = %q, want /config/beet", *beet)
 	}
-	if *log != "/config/import.log" {
-		t.Errorf("log = %q, want /config/import.log", *log)
+	if *state != "/config/state.pickle" {
+		t.Errorf("state = %q, want /config/state.pickle", *state)
 	}
 	if !*verbose {
 		t.Error("verbose should be true")
@@ -126,5 +126,14 @@ func TestRequireFlag_missingReturnsError(t *testing.T) {
 func TestRequireFlag_presentReturnsNil(t *testing.T) {
 	if err := requireFlag("source", "/some/path"); err != nil {
 		t.Errorf("unexpected error for set flag: %v", err)
+	}
+}
+
+func TestApplyConfigToFlagsSkipsMissingFlags(t *testing.T) {
+	pf := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	db := pf.String("db", "", "")
+	applyConfigToFlags(config.Config{DB: "/config/db.db", Source: "/config/source"}, pf)
+	if *db != "/config/db.db" {
+		t.Errorf("db = %q, want /config/db.db", *db)
 	}
 }

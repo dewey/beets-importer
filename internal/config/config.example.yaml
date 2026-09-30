@@ -1,6 +1,6 @@
 # beets-importer configuration
 # Uncomment and fill in the values for your setup.
-# Run 'beets-importer config' to verify the result.
+# Run 'beets-importer config show' to verify the result.
 #
 # ── Required ──────────────────────────────────────────────────────────────────
 # These must be set before any command will work.
@@ -17,13 +17,13 @@
 # See https://github.com/dewey/beets-importer#beet-wrapper-script
 # beet: /opt/homebrew/bin/beet
 #
+# beets incremental state file, needed by 'import'. It lists every folder beets
+# already processed, so 'import' can leave them out. Requires 'incremental: yes'
+# in your beets config. It is state.pickle in your beets config directory.
+# state_file: ~/.config/beets/state.pickle
+#
 # ── Optional ──────────────────────────────────────────────────────────────────
 # Leave these commented out to use the defaults.
-#
-# Import log file written by beet import. When set, albums that appear in the
-# log are skipped by 'import --latest' without needing a library DB lookup.
-# If not set, deduplication relies solely on the library database.
-# log: ~/Music/Music Library Beets/Library/import_log.txt
 #
 # Print a warning for every directory that could not be scanned, instead of
 # showing a single summary count at the end. (default: false)
@@ -32,3 +32,43 @@
 # Skip the scan cache and re-read every directory from disk on each run.
 # Useful after manually moving files. (default: false)
 # no_cache: false
+#
+# ── Doctor ────────────────────────────────────────────────────────────────────
+# Settings for 'beets-importer doctor'. All keys are optional.
+#
+# doctor:
+#   # Bitrate threshold in kbps. Tracks below this are flagged as low quality.
+#   # low_quality_threshold_kbps: 128
+#
+#   # All linters run by default. Set one to false to turn it off.
+#   # linters:
+#   #   empty_dirs: true
+#   #   untracked_dirs: true
+#   #   low_quality: true
+#   #   lowercase_metadata: true
+#   #   protected_audio: true
+#   #   missing_artwork: true
+#   #   missing_year: true
+#   #   split_albums: true
+#   #   split_imports: true
+#   #   artist_variants: true
+#   #   duplicate_names: true
+#
+# ── Ignore ────────────────────────────────────────────────────────────────────
+# Albums that no command suggests or checks: the import picker, 'import
+# --library', 'upgrades' and the doctor linters that read the beets database.
+# Names are compared without case.
+#
+# ignore:
+#   albums:
+#     - "! random !"
+#
+# ── Navidrome ─────────────────────────────────────────────────────────────────
+# Needed by 'import --library --from-playlist'. Navidrome's music folder must
+# be the same folder as beets' 'directory:', so track paths line up.
+#
+# navidrome:
+#   url: https://music.example.com
+#   username: me
+#   # Command that prints the password, so it is not stored in this file.
+#   password_command: op read op://Private/Navidrome/password
