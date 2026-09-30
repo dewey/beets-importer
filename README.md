@@ -176,6 +176,10 @@ beets-importer upgrades --source-format FLAC
 # Combine filters: library is MP3/AAC and source is FLAC, open an interactive picker
 beets-importer upgrades --library-format MP3,AAC --source-format FLAC -i
 
+# Shortcut for lossy library copies replaced by lossless sources
+# (alias for --library-format MP3,AAC,OGG,OPUS --source-format FLAC,ALAC,WAV,AIFF,APE)
+beets-importer upgrades --lossy-to-lossless -i
+
 # Write results to CSV, then import from it later
 beets-importer upgrades -o /tmp/upgrades.csv
 beets-importer import --from-file /tmp/upgrades.csv
@@ -206,6 +210,7 @@ Columns: artist · album · year · track count · format. Fields that match are
 | `--min-bitrate-delta` | 32 | Minimum bitrate improvement in kbps to flag a same-format upgrade |
 | `--library-format` | — | Only consider library albums in these formats, comma-separated (e.g. `MP3,AAC`) |
 | `--source-format` | — | Only consider source albums in these formats, comma-separated (e.g. `FLAC`) |
+| `--lossy-to-lossless` | false | Alias for `--library-format MP3,AAC,OGG,OPUS --source-format FLAC,ALAC,WAV,AIFF,APE`. Cannot be combined with those flags |
 | `--require-year-match` | false | Skip candidates where both sides have a known year that differs |
 | `--output`, `-o` | — | Write candidates to a CSV file instead of printing a table |
 | `--all` | false | Show all matched pairs, not only upgrade candidates |

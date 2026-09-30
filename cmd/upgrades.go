@@ -32,6 +32,12 @@ var (
 	flagUpgradesLibraryFormat    []string
 	flagUpgradesSourceFormat     []string
 	flagUpgradesInteractive      bool
+	flagUpgradesLossyToLossless  bool
+)
+
+const (
+	lossyFormats    = "MP3,AAC,OGG,OPUS"
+	losslessFormats = "FLAC,ALAC,WAV,AIFF,APE"
 )
 
 var upgradesCmd = &cobra.Command{
@@ -61,6 +67,10 @@ func init() {
 		"Only show candidates where the library copy is one of these formats (e.g. MP3,AAC)")
 	upgradesCmd.Flags().StringSliceVar(&flagUpgradesSourceFormat, "source-format", nil,
 		"Only show candidates where the source copy is one of these formats (e.g. FLAC)")
+	upgradesCmd.Flags().BoolVar(&flagUpgradesLossyToLossless, "lossy-to-lossless", false,
+		"Alias for --library-format "+lossyFormats+" --source-format "+losslessFormats)
+	upgradesCmd.MarkFlagsMutuallyExclusive("lossy-to-lossless", "library-format")
+	upgradesCmd.MarkFlagsMutuallyExclusive("lossy-to-lossless", "source-format")
 	upgradesCmd.Flags().BoolVarP(&flagUpgradesInteractive, "interactive", "i", false,
 		"After scanning, show an interactive picker to select candidates and import them")
 }
@@ -123,6 +133,10 @@ type upgradesModel struct {
 }
 
 func newUpgradesModel(scanCache *source.ScanCache) upgradesModel {
+	libFormats, srcFormats := flagUpgradesLibraryFormat, flagUpgradesSourceFormat
+	if flagUpgradesLossyToLossless {
+		libFormats, srcFormats = strings.Split(lossyFormats, ","), strings.Split(losslessFormats, ",")
+	}
 	s := spinner.New()
 	s.Spinner = spinner.Spinner{
 		Frames: spinnerFrames,
@@ -136,8 +150,8 @@ func newUpgradesModel(scanCache *source.ScanCache) upgradesModel {
 		verbose:          flagUpgradesAll,
 		limit:            flagUpgradesLimit,
 		requireYearMatch: flagUpgradesRequireYearMatch,
-		libraryFormats:   upperAll(flagUpgradesLibraryFormat),
-		sourceFormats:    upperAll(flagUpgradesSourceFormat),
+		libraryFormats:   upperAll(libFormats),
+		sourceFormats:    upperAll(srcFormats),
 		scanCache:        scanCache,
 	}
 }
