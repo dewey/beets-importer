@@ -5,21 +5,21 @@
 class BeetsImporter < Formula
   desc "TUI tool for importing music into beets"
   homepage "https://github.com/dewey/beets-importer"
-  version "1.0.1"
+  version "1.0.2"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.intel?
-      url "https://github.com/dewey/beets-importer/releases/download/v1.0.1/beets-importer_1.0.1_darwin_amd64.tar.gz"
-      sha256 "b5234461b5e6b62a9a44459ce82eb9bdc1bf3d97ac44b85dba707554ffda0ccc"
+      url "https://github.com/dewey/beets-importer/releases/download/v1.0.2/beets-importer_1.0.2_darwin_amd64.tar.gz"
+      sha256 "22c790e04546e34b78a31538ad15282b798df2bd64c5a7f3305da7105c579c83"
 
       define_method(:install) do
         bin.install "beets-importer"
       end
     end
     if Hardware::CPU.arm?
-      url "https://github.com/dewey/beets-importer/releases/download/v1.0.1/beets-importer_1.0.1_darwin_arm64.tar.gz"
-      sha256 "7f5abc64d5dcab208c0b61cc6e1a144129efe113da4fd597d7ee71a6de3ac02f"
+      url "https://github.com/dewey/beets-importer/releases/download/v1.0.2/beets-importer_1.0.2_darwin_arm64.tar.gz"
+      sha256 "b393e3db922ccf5c7679cb9b12434a6659b8b1189cbe3fe8f066feba824b700d"
 
       define_method(:install) do
         bin.install "beets-importer"
@@ -29,15 +29,15 @@ class BeetsImporter < Formula
 
   on_linux do
     if Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
-      url "https://github.com/dewey/beets-importer/releases/download/v1.0.1/beets-importer_1.0.1_linux_amd64.tar.gz"
-      sha256 "56a1f3132a731fe66cfb659170fa9d4abbbb0bddfea0fccaf2904ea8aeec2340"
+      url "https://github.com/dewey/beets-importer/releases/download/v1.0.2/beets-importer_1.0.2_linux_amd64.tar.gz"
+      sha256 "b8368fb9a31929bf30c218af33dd7fd9f7113a229ae65010e99762c62118012f"
       define_method(:install) do
         bin.install "beets-importer"
       end
     end
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/dewey/beets-importer/releases/download/v1.0.1/beets-importer_1.0.1_linux_arm64.tar.gz"
-      sha256 "6a67dc278bb76f0fde271eadcd4f01260d05b848067c18a80d2d3a8cd43ddd11"
+      url "https://github.com/dewey/beets-importer/releases/download/v1.0.2/beets-importer_1.0.2_linux_arm64.tar.gz"
+      sha256 "1041056ee887af671451062ac9362dd3478a3e353e3e437b8075ef241aacd7ef"
       define_method(:install) do
         bin.install "beets-importer"
       end
