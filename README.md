@@ -116,6 +116,92 @@ Then check the result:
 beets-importer config show
 ```
 
+## Common commands
+
+### Import the newest albums
+
+```sh
+beets-importer import --limit 10
+beets-importer import --limit 10 --source ~/Downloads/music
+```
+
+Looks at the source folder, leaves out folders beets already processed, and opens a picker with the 10 newest ones. You select albums, and `beet import` runs for each of them.
+
+- `--limit 10`: show at most 10 albums. Without it you get all new folders.
+- `--source`: scan this folder instead of `source` from the config.
+
+### Replace lossy albums with lossless ones
+
+```sh
+beets-importer upgrades --lossy-to-lossless -i --limit 10
+```
+
+Scans the source folder, finds albums that are in your library as MP3, AAC, OGG or OPUS and in the source folder as FLAC, ALAC, WAV, AIFF or APE, and opens a picker. You see both copies side by side and import the ones you pick.
+
+- `--lossy-to-lossless`: only look at lossy library albums that have a lossless copy in the source folder.
+- `-i` (`--interactive`): open the picker. Without it you get a table.
+- `--limit 10`: stop after 10 candidates. This makes the scan quick.
+
+### Save lossy albums to a file
+
+```sh
+beets-importer upgrades --library-format MP3,AAC --csv lossy.csv
+```
+
+Finds upgrade candidates where the library copy is MP3 or AAC, and writes them to a CSV file instead of printing a table. You can import from the file later with `import --from-file lossy.csv`.
+
+- `--library-format MP3,AAC`: only look at library albums in these formats. The source copy can be any better format or bitrate.
+- `--csv lossy.csv`: write the candidates to this file.
+
+### Check the library and fix what is found
+
+```sh
+beets-importer doctor
+beets-importer maintenance
+```
+
+`doctor` checks your library and shows the problems it finds. It changes nothing. `maintenance` runs the same checks, then lets you pick which problems to fix. The fixes run one by one and stop at the first error.
+
+- `maintenance --folders`: also run the checks that walk the library folder. They are slow on a network share.
+- `maintenance --limit 20`: run at most 20 fixes.
+
+### Retag albums that are spelled in different ways
+
+```sh
+beets-importer doctor --linter split_albums --ids > split.txt
+beets-importer import --retag --from-file split.txt --limit 10
+```
+
+The first command writes the beets IDs of albums that players show twice into a file. The second retags 10 of them with `beet import -L`. Run it again to get the next 10, because retagged albums are marked and left out.
+
+- `--linter split_albums`: run only this check.
+- `--ids`: print only album IDs, one per line.
+- `--retag`: retag albums that are already in the library, instead of importing new ones.
+- `--from-file split.txt`: read the album IDs from this file.
+- `--limit 10`: retag at most 10 albums in this run.
+
+### Retag the albums of a Navidrome playlist
+
+```sh
+beets-importer import --retag --from-playlist <playlist-id> --limit 10
+```
+
+Takes every album that has a track in the playlist and retags it. The playlist ID is the last part of the playlist URL. It needs the `navidrome` section in the config.
+
+- `--from-playlist`: the Navidrome playlist to read the albums from. Needs `--retag`.
+
+### Write the library report
+
+```sh
+beets-importer report
+```
+
+Writes `index.html` with statistics about your library to the `report` folder in the data folder, and saves a snapshot for the progress charts.
+
+- `--output ~/Music/report`: write the page to this folder instead.
+- `--no-snapshot`: do not save a snapshot of this run.
+- `--refresh-disk`: read all file sizes and covers from disk again.
+
 ---
 
 ## Configuration
