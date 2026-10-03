@@ -58,6 +58,7 @@ func runConfigShow(_ *cobra.Command, _ []string) error {
 		{"source", cfg.Source, true},
 		{"beet", cfg.Beet, true},
 		{"state_file", cfg.StateFile, false},
+		{"report_output", cfg.ReportOutput, false},
 		{"verbose", fmt.Sprint(cfg.Verbose), false},
 		{"no_cache", fmt.Sprint(cfg.NoCache), false},
 	}

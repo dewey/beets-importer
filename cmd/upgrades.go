@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/dewey/beets-importer/internal/beets"
 	"github.com/dewey/beets-importer/internal/compare"
+	"github.com/dewey/beets-importer/internal/config"
+	"github.com/dewey/beets-importer/internal/ignore"
 	"github.com/dewey/beets-importer/internal/matcher"
 	"github.com/dewey/beets-importer/internal/picker"
 	"github.com/dewey/beets-importer/internal/source"
@@ -33,6 +36,7 @@ var (
 	flagUpgradesSourceFormat     []string
 	flagUpgradesInteractive      bool
 	flagUpgradesLossyToLossless  bool
+	flagUpgradesShowIgnored      bool
 )
 
 const (
@@ -71,6 +75,8 @@ func init() {
 		"Alias for --library-format "+lossyFormats+" --source-format "+losslessFormats)
 	upgradesCmd.MarkFlagsMutuallyExclusive("lossy-to-lossless", "library-format")
 	upgradesCmd.MarkFlagsMutuallyExclusive("lossy-to-lossless", "source-format")
+	upgradesCmd.Flags().BoolVar(&flagUpgradesShowIgnored, "show-ignored", false,
+		"List ignored candidates greyed out in the interactive picker, so they can be unignored")
 	upgradesCmd.Flags().BoolVarP(&flagUpgradesInteractive, "interactive", "i", false,
 		"After scanning, show an interactive picker to select candidates and import them")
 }
@@ -114,6 +120,7 @@ type upgradesModel struct {
 	scanTotal     int
 	currentDir    string
 	candidates    []compare.Candidate
+	ignored       []compare.Candidate // candidates on the ignore list, kept out of candidates and the limit
 	warnings      []string
 	err           error
 	cancelled     bool
@@ -130,9 +137,10 @@ type upgradesModel struct {
 	libraryFormats   []string // upper-cased; empty = no filter
 	sourceFormats    []string // upper-cased; empty = no filter
 	scanCache        *source.ScanCache
+	ignores          *ignore.Store
 }
 
-func newUpgradesModel(scanCache *source.ScanCache) upgradesModel {
+func newUpgradesModel(scanCache *source.ScanCache, ignores *ignore.Store) upgradesModel {
 	libFormats, srcFormats := flagUpgradesLibraryFormat, flagUpgradesSourceFormat
 	if flagUpgradesLossyToLossless {
 		libFormats, srcFormats = strings.Split(lossyFormats, ","), strings.Split(losslessFormats, ",")
@@ -153,6 +161,7 @@ func newUpgradesModel(scanCache *source.ScanCache) upgradesModel {
 		libraryFormats:   upperAll(libFormats),
 		sourceFormats:    upperAll(srcFormats),
 		scanCache:        scanCache,
+		ignores:          ignores,
 	}
 }
 
@@ -237,6 +246,10 @@ func (m upgradesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					continue
 				}
 				if !formatAllowed(cand.Source.Format, m.sourceFormats) {
+					continue
+				}
+				if m.ignores.Has(ignore.Upgrades, ignoreEntry(cand)) {
+					m.ignored = append(m.ignored, cand)
 					continue
 				}
 				m.candidates = append(m.candidates, cand)
@@ -339,7 +352,15 @@ func runUpgrades(_ *cobra.Command, _ []string) error {
 			scanCache, _ = source.LoadCache(cachePath)
 		}
 	}
-	p := tea.NewProgram(newUpgradesModel(scanCache), tea.WithOutput(os.Stderr))
+	configPath, err := config.DefaultPath()
+	if err != nil {
+		return err
+	}
+	ignores, err := ignore.Load(filepath.Join(filepath.Dir(configPath), "ignore.json"))
+	if err != nil {
+		return err
+	}
+	p := tea.NewProgram(newUpgradesModel(scanCache, ignores), tea.WithOutput(os.Stderr))
 	final, err := p.Run()
 	if err != nil {
 		return fmt.Errorf("tui: %w", err)
@@ -370,12 +391,17 @@ func runUpgrades(_ *cobra.Command, _ []string) error {
 		styleFound.Render("✓"),
 		styleLabel.Render(fmt.Sprintf("%d albums loaded from library", len(result.libraryAlbums))),
 	)
-	fmt.Fprintf(os.Stderr, "%s %s\n\n",
-		styleFound.Render("✓"),
-		styleLabel.Render(fmt.Sprintf("%d upgrade candidate(s) found", len(result.candidates))),
-	)
+	found := fmt.Sprintf("%d upgrade candidate(s) found", len(result.candidates))
+	if n := len(result.ignored); n > 0 {
+		found += fmt.Sprintf(" (%d ignored)", n)
+	}
+	fmt.Fprintf(os.Stderr, "%s %s\n\n", styleFound.Render("✓"), styleLabel.Render(found))
 
-	if len(result.candidates) == 0 {
+	var shownIgnored []compare.Candidate
+	if flagUpgradesInteractive && flagUpgradesShowIgnored {
+		shownIgnored = result.ignored
+	}
+	if len(result.candidates) == 0 && len(shownIgnored) == 0 {
 		fmt.Println("No upgrade candidates found.")
 		return nil
 	}
@@ -479,16 +505,16 @@ func runUpgrades(_ *cobra.Command, _ []string) error {
 	}
 
 	if flagUpgradesInteractive {
-		items := make([]picker.Item, len(result.candidates))
-		for i, c := range result.candidates {
-			items[i] = buildPickerItem(c)
-		}
-		pp := tea.NewProgram(picker.NewFromItems("Select albums to import", items))
-		finalModel, err := pp.Run()
+		pm := picker.NewFromItems("Select albums to import", buildPickerItems(result.candidates, shownIgnored))
+		pm.IgnoreFeature = ignore.Upgrades
+		finalModel, err := tea.NewProgram(pm).Run()
 		if err != nil {
 			return fmt.Errorf("picker: %w", err)
 		}
 		m := finalModel.(picker.Model)
+		if err = saveIgnores(ignores, m.Items()); err != nil {
+			return err
+		}
 		if !m.Confirmed {
 			fmt.Fprintln(os.Stderr, "Cancelled.")
 			return nil
@@ -544,6 +570,32 @@ const (
 	pickerColTracks = 3
 	pickerColFormat = 5
 )
+
+func ignoreEntry(c compare.Candidate) ignore.Entry {
+	return ignore.Entry{Source: c.Source.DirName, Library: c.Library.Path}
+}
+
+// buildPickerItems lists the candidates first, then the ignored ones greyed out.
+func buildPickerItems(candidates, ignored []compare.Candidate) []picker.Item {
+	items := make([]picker.Item, 0, len(candidates)+len(ignored))
+	for _, c := range candidates {
+		items = append(items, buildPickerItem(c))
+	}
+	for _, c := range ignored {
+		item := buildPickerItem(c)
+		item.Ignored = true
+		items = append(items, item)
+	}
+	return items
+}
+
+// saveIgnores writes the ignored state of every picker item to the store.
+func saveIgnores(store *ignore.Store, items []picker.Item) error {
+	for _, item := range items {
+		store.Set(ignore.Upgrades, ignore.Entry{Source: item.Name, Library: item.LibraryPath}, item.Ignored)
+	}
+	return store.Save()
+}
 
 // buildPickerItem builds a styled picker.Item for an upgrade candidate.
 // Line1 shows the source (incoming) album; Line2 shows the matched library album.

@@ -7,12 +7,14 @@ require (
 	charm.land/bubbletea/v2 v2.0.10
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/agnivade/levenshtein v1.2.1
+	github.com/charmbracelet/x/ansi v0.11.8
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/nlpodyssey/gopickle v0.3.0
 	github.com/olekukonko/tablewriter v1.1.5
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	go.yaml.in/yaml/v3 v3.0.5
+	golang.org/x/image v0.46.0
 	golang.org/x/text v0.42.0
 	modernc.org/sqlite v1.59.0
 )
@@ -21,7 +23,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260922123528-4e49372c11f9 // indirect
-	github.com/charmbracelet/x/ansi v0.11.8 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
 	github.com/charmbracelet/x/windows v0.2.2 // indirect

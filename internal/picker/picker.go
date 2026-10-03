@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/dewey/beets-importer/internal/source"
 )
 
@@ -34,6 +35,7 @@ type Item struct {
 	Key         string // caller data to find the item again after selection, not shown
 	Disabled    bool   // shown, but cannot be selected
 	Done        bool   // with Disabled: shows a green check instead of a dash, for "nothing to do"
+	Ignored     bool   // greyed out and never returned by Selected; select it and press x to undo
 	selected    bool
 }
 
@@ -53,15 +55,16 @@ type inspectState struct {
 
 // Model is the bubbletea model for the multi-select album picker.
 type Model struct {
-	title        string
-	items        []Item
-	cursor       int
-	offset       int
-	height       int // visible rows for the list, updated on WindowSizeMsg
-	width        int // terminal width, updated on WindowSizeMsg
-	windowHeight int // full terminal height, updated on WindowSizeMsg
-	Confirmed    bool
-	inspect      *inspectState // non-nil when the inspect modal is open
+	title         string
+	items         []Item
+	cursor        int
+	offset        int
+	height        int // visible rows for the list, updated on WindowSizeMsg
+	width         int // terminal width, updated on WindowSizeMsg
+	windowHeight  int // full terminal height, updated on WindowSizeMsg
+	Confirmed     bool
+	IgnoreFeature string        // feature name for the x key ("upgrades"); empty turns the key off
+	inspect       *inspectState // non-nil when the inspect modal is open
 }
 
 // New creates a Model from a slice of source albums.
@@ -151,13 +154,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// If any item is unselected, select all. Otherwise deselect all.
 			allSelected := true
 			for _, item := range m.items {
-				if !item.selected && !item.Disabled {
+				if !item.selected && item.selectable() {
 					allSelected = false
 					break
 				}
 			}
 			for i := range m.items {
-				m.items[i].selected = !allSelected && !m.items[i].Disabled
+				m.items[i].selected = !allSelected && m.items[i].selectable()
+			}
+
+		case "x":
+			if m.IgnoreFeature != "" {
+				m.toggleIgnored()
 			}
 
 		case "i":
@@ -203,7 +211,11 @@ func (m Model) viewList() string {
 
 	b.WriteString(styleHeader.Render(m.title))
 	b.WriteString("  ")
-	b.WriteString(styleMeta.Render("SPACE toggle · CTRL+A all · I inspect · ENTER confirm · ESC cancel"))
+	hint := "SPACE toggle · CTRL+A all · I inspect · ENTER confirm · ESC cancel"
+	if m.IgnoreFeature != "" {
+		hint = "SPACE toggle · CTRL+A all · I inspect · X ignore in " + m.IgnoreFeature + " · ENTER confirm · ESC cancel"
+	}
+	b.WriteString(styleMeta.Render(hint))
 	b.WriteString("\n")
 	b.WriteString(styleSep.Render(strings.Repeat("─", 90)))
 	b.WriteString("\n")
@@ -230,19 +242,29 @@ func (m Model) viewList() string {
 			}
 			nameStyle = styleDim
 		}
+		if item.Ignored {
+			check = styleDim.Render("[⊘]")
+			nameStyle = styleDim
+		}
 		if item.selected {
 			check = styleCheck.Render("[✓]")
-			nameStyle = styleSelected
+			if !item.Ignored {
+				nameStyle = styleSelected
+			}
 		}
 
 		line1 := item.Line1
-		if !item.Styled {
+		if item.Ignored {
+			line1 = styleDim.Render(ansi.Strip(line1))
+		} else if !item.Styled {
 			line1 = nameStyle.Render(line1)
 		}
 		fmt.Fprintf(&b, "%s%s %s\n", cursor, check, line1)
 		if item.Line2 != "" {
 			line2 := item.Line2
-			if !item.Styled {
+			if item.Ignored {
+				line2 = styleDim.Render(ansi.Strip(line2))
+			} else if !item.Styled {
 				line2 = styleMeta.Render(line2)
 			}
 			fmt.Fprintf(&b, "      %s\n", line2)
@@ -253,12 +275,18 @@ func (m Model) viewList() string {
 	b.WriteString("\n")
 
 	nSelected := m.numSelected()
+	nIgnored := 0
+	for _, item := range m.items {
+		if item.Ignored {
+			nIgnored++
+		}
+	}
 	scroll := ""
 	if len(m.items) > m.height {
 		scroll = fmt.Sprintf("  (%d–%d of %d)", m.offset+1, end, len(m.items))
 	}
 	b.WriteString(styleStatus.Render(
-		fmt.Sprintf("%d selected%s", nSelected, scroll),
+		fmt.Sprintf("%d selected · %d ignored%s", nSelected, nIgnored, scroll),
 	))
 
 	return b.String()
@@ -412,11 +440,28 @@ func truncatePath(s string, max int) string {
 	return "…" + s[len(s)-(max-1):]
 }
 
-// Selected returns the items the user confirmed.
+// selectable reports whether ctrl+a may select the item. Ignored items can
+// still be selected one by one, so they can be unignored.
+func (i Item) selectable() bool { return !i.Disabled && !i.Ignored }
+
+// toggleIgnored flips the ignored state of the selected items and unselects them.
+func (m *Model) toggleIgnored() {
+	for i := range m.items {
+		if m.items[i].selected && !m.items[i].Disabled {
+			m.items[i].Ignored = !m.items[i].Ignored
+			m.items[i].selected = false
+		}
+	}
+}
+
+// Items returns all items with their current ignored state.
+func (m Model) Items() []Item { return m.items }
+
+// Selected returns the items the user confirmed. Ignored items are left out.
 func (m Model) Selected() []Item {
 	out := make([]Item, 0, len(m.items))
 	for _, item := range m.items {
-		if item.selected {
+		if item.selected && !item.Ignored {
 			out = append(out, item)
 		}
 	}

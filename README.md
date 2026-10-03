@@ -5,6 +5,7 @@ A CLI tool for [beets](https://beets.readthedocs.io) that helps with two things:
 - **`import`**: pick recently-added albums from your download folder and import them interactively, import from a text file of paths, or retag library albums from a list of album IDs
 - **`upgrades`**: scan your download folder, match albums against your library, and surface upgrade candidates: better format (e.g. FLAC replacing MP3) or higher bitrate
 - **`maintenance`**: run the doctor linters and fix what they find as a queue: retag, fetch artwork, import untracked folders, remove empty folders
+- **`report`**: write a static HTML report about your library: formats, bitrates, years, gaps and the progress towards an all-lossless library
 - **`doctor`**: check your beets library for problems such as empty or untracked folders, low bitrate files, missing artwork or years, and artists spelled in different ways
 
 ## Screenshots
@@ -198,6 +199,10 @@ When `--interactive` is passed, an interactive picker opens after scanning inste
 
 Columns: artist · album · year · track count · format. Fields that match are highlighted green; mismatches (year, track count) are highlighted orange.
 
+To hide a wrong match (for example "Square One" matched to "Square Two"), select it and press `x` (shown as "X ignore in upgrades"). The row is unselected and greyed out (`[⊘]`) and stays in the list. To undo it, select the greyed row again and press `x`. Ignored rows are never imported, and `CTRL+A` skips them. They are saved when the picker closes, also on ESC.
+
+Ignores are saved per feature in `~/.config/beets-importer/ignore.json`, so ignoring a pair in `upgrades` does not affect other commands. Only that exact source and library pair is ignored. Ignored pairs are hidden on later runs and do not count toward `--limit`. Rows you ignore stay greyed out in the picker until it closes. To undo an ignore later, run `upgrades -i --show-ignored`, which lists ignored pairs greyed out at the bottom.
+
 **Controls:** `SPACE` toggle · `CTRL+A` select all · `j/k` or arrows navigate · `ENTER` confirm · `ESC` cancel · `I` inspect
 
 ### Flags
@@ -211,6 +216,7 @@ Columns: artist · album · year · track count · format. Fields that match are
 | `--library-format` | — | Only consider library albums in these formats, comma-separated (e.g. `MP3,AAC`) |
 | `--source-format` | — | Only consider source albums in these formats, comma-separated (e.g. `FLAC`) |
 | `--lossy-to-lossless` | false | Alias for `--library-format MP3,AAC,OGG,OPUS --source-format FLAC,ALAC,WAV,AIFF,APE`. Cannot be combined with those flags |
+| `--show-ignored` | false | With `-i`, also list ignored candidates greyed out so they can be unignored |
 | `--require-year-match` | false | Skip candidates where both sides have a known year that differs |
 | `--output`, `-o` | — | Write candidates to a CSV file instead of printing a table |
 | `--all` | false | Show all matched pairs, not only upgrade candidates |
@@ -407,3 +413,41 @@ A name like "gehört" can be stored with "ö" as one code point (NFC) or as "o" 
 | `--paths` | false | Print only issue paths of the selected linters, one per line (requires `--linter`) |
 | `--ids` | false | Print only the beets album IDs of the selected linters, one per line, for `import --library` (requires `--linter`; not for folder linters) |
 | `--print0`, `-0` | false | With `--paths`, separate paths with NUL (for `xargs -0`) |
+
+---
+
+## `report`: library statistics as a web page
+
+Reads the beets database (read-only) and writes one `index.html` that loads [Carbon Charts](https://charts.carbondesignsystem.com) and the IBM Plex font (pinned versions, with integrity hashes where it matters) from jsDelivr, so the browser needs internet access. No server is needed. Covers of the recent imports are linked from the file system at full size, with a smaller copy embedded in case the file cannot be opened.
+
+```sh
+beets-importer report --output ~/Music/report
+```
+
+The page shows:
+
+- **Recently imported**: the last 10 albums with cover art, format and import date
+- **Road to all lossless**: albums and tracks split into lossless (FLAC, ALAC and others), lossy and mixed
+- **Formats and quality**: tracks per format (FLAC and ALAC apart), lossy bitrates, lossless bit depth and sample rate, and a format to class flow
+- **Storage**: size on disk by format and the library size per import month
+- **Collection**: albums per release year, an import calendar, top artists, albums per month, genres, tracks per album, album types and labels
+- **Upgrade list**: the artists with the most lossy albums
+- **Gaps**: how complete the metadata is, and a filterable list per gap (lossy and mixed albums, duplicate albums, files missing on disk, no album name, no year, no cover art, cover in folder only, no genre, no MusicBrainz or Discogs ID, tracks without title or number, singletons). Lists show the first 500 rows, counts are exact
+- **Beets internal**: database file size, row counts, which optional track fields plugins filled (MusicBrainz IDs, ReplayGain, lyrics, ...), the flexible attributes in use and duplicate album names. This part reads the raw database, ignored albums included
+
+Every list of albums has a **Copy** button that puts `Artist - Album` on the clipboard, and a link to the MusicBrainz or Discogs release when beets knows its ID. The lists also have buttons to copy all rows, with or without links. Use them to search for lossless copies.
+
+Details:
+
+- An album has cover art when beets has an art path, or when its folder holds `cover`, `folder`, `front`, `album`, `albumart`, `art` or `artwork` as `.jpg`, `.jpeg`, `.png` or `.webp`. Art embedded in the audio files is not detected.
+- File sizes and cover folders come from the music folder, which is slow on a network share. They are cached in the store and read again in full every 30 days. Files that are new since the last scan are read on the next run. Pass `--refresh-disk` to read everything again. If more than half of the files are missing, the run stops and saves nothing, because the music folder is probably not mounted.
+- Albums in `ignore.albums` are left out. Years before 1900 count as missing, and "Various Artists" is left out of the top artists and the upgrade list.
+
+Each run saves a snapshot (one per day, the last run of a day wins) with the lossless and lossy album counts, the lossless track count and the size on disk to `~/.config/beets-importer/store.db`, next to the config file, together with the cached disk facts. The report draws the lossless share of albums and tracks and the library size over time from the snapshots. Pass `--no-snapshot` to generate a report without saving one. Set `report_output` in the config to skip `--output`.
+
+| Flag | Config key | Description |
+|---|---|---|
+| `--db` | `db` | Path to beets SQLite database |
+| `--output` | `report_output` | Folder to write `index.html` to |
+| `--no-snapshot` | | Do not save a snapshot of this run |
+| `--refresh-disk` | | Read all file sizes and cover images from disk again |

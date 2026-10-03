@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library Report</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@carbon/charts@1.27.20/dist/styles.min.css" integrity="sha384-gD7z/KxSBhVYtwrFTu2f/YuyXYLEML7dPiFMhnEN/zFi3/qcHj/DXqCyA/5Q58mW" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/@carbon/charts@1.27.20/dist/umd/bundle.umd.js" integrity="sha384-cAgljuPjDP6k6rXT5WTbMo2j6TiifyUKH399nCNWgfOut1aPR4DU136GM2eMeiDN" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.3.0/latin-300.css" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.3.0/latin-400.css" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.3.0/latin-600.css" crossorigin="anonymous">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f4f4; --surface: #ffffff; --line: #e0e0e0; --grid: #f0f0f0; --hover: #e8e8e8;
+  --ink: #161616; --ink2: #525252; --ink3: #6f6f6f;
+  --flac: #2a78d6; --alac: #1baf7a; --lossy: #eb6834; --mixed: #e87ba4;
+  --yellow: #eda100; --violet: #4a3aa7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --bg: #161616; --surface: #262626; --line: #393939; --grid: #2c2c2c; --hover: #333333;
+    --ink: #f4f4f4; --ink2: #c6c6c6; --ink3: #a8a8a8;
+    --flac: #3987e5; --alac: #199e70; --lossy: #d95926; --mixed: #d55181;
+    --yellow: #c98500; --violet: #9085e9;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #161616; --surface: #262626; --line: #393939; --grid: #2c2c2c; --hover: #333333;
+  --ink: #f4f4f4; --ink2: #c6c6c6; --ink3: #a8a8a8;
+  --flac: #3987e5; --alac: #199e70; --lossy: #d95926; --mixed: #d55181;
+  --yellow: #c98500; --violet: #9085e9;
+}
+* { box-sizing: border-box; border-radius: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: 64px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+.shell { position: sticky; top: 0; z-index: 10; background: #161616; color: #f4f4f4; }
+.shellin { max-width: 1280px; margin: 0 auto; padding: 0 16px; display: flex; align-items: center; gap: 24px; height: 48px; }
+.brand { font-weight: 600; white-space: nowrap; }
+.shell nav { display: flex; flex: 1; overflow-x: auto; }
+.shell nav a { color: #c6c6c6; text-decoration: none; font-size: 13px; padding: 0 14px; line-height: 48px; white-space: nowrap; border-bottom: 3px solid transparent; }
+.shell nav a:hover { color: #fff; background: #333; border-bottom-color: #fff; }
+button.theme { background: transparent; color: #c6c6c6; border: 1px solid #6f6f6f; padding: 4px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+button.theme:hover { color: #fff; border-color: #fff; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 16px 80px; counter-reset: sec; }
+header { padding: 56px 0 40px; }
+h1 { font-size: clamp(40px, 7vw, 76px); font-weight: 300; margin: 0; letter-spacing: -0.03em; line-height: 1; }
+.sub { color: var(--ink3); font-size: 13px; }
+header .sub { margin-top: 14px; font-size: 14px; }
+h2 { counter-increment: sec; font-size: 28px; font-weight: 300; letter-spacing: -0.01em; margin: 72px 0 20px; padding-top: 14px; border-top: 3px solid var(--ink); display: flex; align-items: baseline; }
+h2::before { content: counter(sec, decimal-leading-zero); font-size: 13px; font-weight: 600; color: var(--ink3); width: 48px; flex: none; letter-spacing: 0.04em; }
+.kpis, .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 2px; margin-bottom: 2px; }
+.card { background: var(--surface); padding: 24px; min-width: 0; }
+.kpi { padding: 20px 24px 24px; }
+.kpi .l { color: var(--ink2); font-size: 13px; }
+.kpi .v { font-size: 44px; font-weight: 300; letter-spacing: -0.03em; line-height: 1.15; margin-top: 18px; font-variant-numeric: tabular-nums; }
+.kpi .v { white-space: nowrap; }
+.kpi .u { font-size: 18px; color: var(--ink2); margin-left: 4px; letter-spacing: 0; }
+.hero { display: grid; grid-template-columns: 1fr 1.5fr; gap: 56px; align-items: center; }
+@media (max-width: 960px) { .hero { grid-template-columns: 1fr; gap: 24px; } }
+.big { font-size: clamp(64px, 9vw, 112px); font-weight: 300; letter-spacing: -0.04em; line-height: 1; margin-bottom: 12px; font-variant-numeric: tabular-nums; }
+.kpi .n { color: var(--ink3); font-size: 12px; margin-top: 4px; }
+.grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; }
+.c4 { grid-column: span 4; } .c5 { grid-column: span 5; } .c6 { grid-column: span 6; } .c7 { grid-column: span 7; } .c8 { grid-column: span 8; } .c12 { grid-column: span 12; }
+@media (max-width: 960px) { .c4, .c5, .c6, .c7, .c8 { grid-column: span 12; } }
+.card h3 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+.card .note { margin: 0 0 16px; color: var(--ink3); font-size: 13px; }
+.chart { min-width: 0; }
+.cds--chart-holder { background: transparent !important; }
+#flow { padding-bottom: 20px; }
+#flow svg { overflow: visible; }
+.notice { background: var(--surface); border-left: 4px solid var(--lossy); padding: 14px 18px; margin-bottom: 16px; display: none; }
+.tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+.tabs button { background: none; color: var(--ink2); border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; padding: 8px 14px; font: inherit; font-size: 13px; cursor: pointer; }
+.tabs button:hover { background: var(--hover); }
+.tabs button[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+.tabs button span { color: var(--ink3); margin-left: 6px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.tools { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.tools input { flex: 1; min-width: 200px; max-width: 340px; background: var(--bg); color: var(--ink); border: 0; border-bottom: 1px solid var(--ink3); padding: 9px 12px; font: inherit; }
+.tools input:focus { outline: 2px solid var(--flac); outline-offset: -2px; }
+.scroll { max-height: 460px; overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { position: sticky; top: 0; background: var(--grid); text-align: left; font-weight: 600; color: var(--ink); font-size: 12px; padding: 10px 12px; border-bottom: 1px solid var(--ink3); }
+td { padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--ink); }
+tbody tr:hover td { background: var(--grid); }
+td.m { white-space: nowrap; color: var(--ink2); font-variant-numeric: tabular-nums; }
+td.act { white-space: nowrap; text-align: right; }
+td.act > * { margin-left: 4px; }
+.albums-cell { color: var(--ink2); max-width: 520px; }
+.empty { color: var(--ink3); padding: 24px; text-align: center; }
+button.copy, a.link { background: transparent; color: var(--ink); border: 1px solid var(--ink); padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; text-decoration: none; white-space: nowrap; display: inline-block; }
+button.copy:hover, a.link:hover { background: var(--ink); color: var(--surface); }
+button.big { padding: 7px 14px; }
+.shelf { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; }
+@media (max-width: 1100px) { .shelf { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px) { .shelf { grid-template-columns: repeat(2, 1fr); } }
+.album { background: var(--surface); display: flex; flex-direction: column; }
+.cover { aspect-ratio: 1; background: var(--grid); display: flex; align-items: center; justify-content: center; color: var(--ink3); font-size: 48px; font-weight: 300; }
+.cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.album .meta { padding: 14px 16px 4px; min-width: 0; flex: 1; }
+.album .t { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.album .a { color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.album .d { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--ink2); font-size: 12px; }
+.album .when { color: var(--ink3); font-size: 12px; margin-top: 4px; }
+.acts { display: flex; gap: 6px; padding: 10px 16px 16px; align-items: center; }
+.chip { color: #fff; padding: 1px 7px; font-size: 11px; font-weight: 600; }
+.chip.lossless { background: var(--flac); } .chip.lossy { background: var(--lossy); } .chip.mixed { background: var(--mixed); }
+</style>
+</head>
+<body>
+<div class="shell"><div class="shellin">
+  <span class="brand">beets-importer</span>
+  <nav><a href="#recent">Recent</a><a href="#lossless">Lossless</a><a href="#quality-section">Formats</a><a href="#storage">Storage</a><a href="#collection">Collection</a><a href="#upgrades">Upgrade list</a><a href="#gaps">Gaps</a><a href="#internal">Beets internal</a></nav>
+  <button class="theme" id="theme" type="button">Theme</button>
+</div></div>
+<div class="wrap">
+<header><h1>Library Report</h1><div class="sub">Generated {{.Date}} from the beets database</div></header>
+<div class="notice" id="notice">The charts come from the Carbon Charts library on jsDelivr and could not be loaded. Connect to the internet and reload.</div>
+
+<div class="kpis" id="kpis"></div>
+
+<h2 id="recent">Recently imported</h2>
+<div class="shelf" id="shelf"></div>
+
+<h2 id="lossless">Road to all lossless</h2>
+<div class="grid">
+  <div class="card c12 hero">
+    <div><div class="big" id="bigLeft"></div><h3 id="progressTitle"></h3><p class="note">Lossless is FLAC, ALAC and other lossless formats. The rest needs a lossless source.</p></div>
+    <div><div class="chart" id="meterAlbums"></div><div class="chart" id="meterTracks"></div></div>
+  </div>
+  <div class="card c6"><h3>Lossless share over time</h3><p class="note" id="historyNote"></p><div class="chart" id="history"></div></div>
+  <div class="card c6"><h3>Library size over time</h3><p class="note">Size on disk at each report run.</p><div class="chart" id="historySize"></div></div>
+</div>
+
+<h2 id="quality-section">Formats and quality</h2>
+<div class="grid">
+  <div class="card c4"><h3>Tracks by format</h3><p class="note">FLAC and ALAC are shown apart.</p><div class="chart" id="formats"></div></div>
+  <div class="card c4"><h3>Lossy bitrates</h3><p class="note">Lossy tracks by average bitrate in kbps.</p><div class="chart" id="bitrate"></div></div>
+  <div class="card c4"><h3>Lossless resolution</h3><p class="note">Lossless tracks by bit depth and sample rate.</p><div class="chart" id="quality"></div></div>
+  <div class="card c12"><h3>From format to class</h3><p class="note">How the tracks of each format add up to lossless and lossy.</p><div class="chart" id="flow"></div></div>
+</div>
+
+<h2 id="storage">Storage</h2>
+<div class="grid">
+  <div class="card c4"><h3>Size by format</h3><p class="note" id="sizeNote"></p><div class="chart" id="sizeFormats"></div></div>
+  <div class="card c8"><h3>Library size over time</h3><p class="note">Cumulative size by the month albums were imported, split by their format today.</p><div class="chart" id="growth"></div></div>
+</div>
+
+<h2 id="collection">Collection</h2>
+<div class="grid">
+  <div class="card c12"><h3>Albums by release year</h3><p class="note">Lossless vs lossy. Shows which eras still need a lossless copy.</p><div class="chart" id="years"></div></div>
+  <div class="card c12"><h3>Import calendar</h3><p class="note">Albums imported per day over the last 12 months, one column per week.</p><div class="chart" id="calendar"></div></div>
+  <div class="card c8"><h3>Top artists</h3><p class="note">By number of albums, without "Various Artists".</p><div class="chart" id="artists"></div></div>
+  <div class="card c4"><h3>Albums added per month</h3><p class="note" id="addedNote"></p><div class="chart" id="added"></div></div>
+  <div class="card c8"><h3>Genres</h3><p class="note">Albums per genre, grouped by lossless and lossy. The lossy blocks are your upgrade backlog by genre.</p><div class="chart" id="genres"></div></div>
+  <div class="card c4"><h3>Tracks per album</h3><p class="note">Singles, EPs, albums and long releases.</p><div class="chart" id="albumSizes"></div></div>
+  <div class="card c4"><h3>Album types</h3><p class="note">From the beets albumtype field.</p><div class="chart" id="types"></div></div>
+  <div class="card c8"><h3>Labels</h3><p class="note">Top labels by number of albums.</p><div class="chart" id="labels"></div></div>
+</div>
+
+<h2 id="upgrades">Upgrade list</h2>
+<div class="grid">
+  <div class="card c12">
+    <h3>Artists with the most lossy albums</h3><p class="note">Start here when you look for lossless copies. Copy gives "Artist - Album" lines for your search.</p>
+    <div class="tools"><button class="copy big" id="copyAllArtists" type="button">Copy all</button><button class="copy big" id="copyAllArtistsLinks" type="button">Copy all with links</button></div>
+    <div class="scroll"><table><thead><tr><th>Artist</th><th>Lossy albums</th><th>Albums</th><th></th></tr></thead><tbody id="lossyArtists"></tbody></table></div>
+  </div>
+</div>
+
+<h2 id="gaps">Gaps</h2>
+<div class="grid">
+  <div class="card c5"><h3>Metadata completeness</h3><p class="note">Share of albums or tracks that have the field set.</p><div class="chart" id="checks"></div></div>
+  <div class="card c7">
+    <h3>Explore</h3><p class="note" id="gapHint"></p>
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <div class="tools"><input id="filter" type="search" placeholder="Filter by artist or album" aria-label="Filter rows"><button class="copy big" id="copyShown" type="button">Copy shown</button><button class="copy big" id="copyShownLinks" type="button">Copy with links</button><span class="sub" id="shown"></span></div>
+    <div class="scroll"><table><thead><tr><th>Artist</th><th>Album</th><th>Year</th><th>Format</th><th>Detail</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+  </div>
+</div>
+
+<h2 id="internal">Beets internal</h2>
+<p class="sub" style="margin:-8px 0 16px 48px">Raw database, ignored albums included.</p>
+<div class="facts" id="facts"></div>
+<div class="grid">
+  <div class="card c6"><h3>Optional track fields</h3><p class="note">Share of tracks with the field set. Plugins like chroma, replaygain and lyrics fill most of these.</p><div class="chart" id="fields"></div></div>
+  <div class="card c6"><h3>Flexible attributes</h3><p class="note">Custom fields stored next to the standard ones: from plugins, or from this tool (retagged, retag_skipped).</p><div class="scroll"><table><thead><tr><th>Entity</th><th>Key</th><th>Rows</th></tr></thead><tbody id="attrs"></tbody></table></div></div>
+</div>
+</div>
+
+<script>
+const D = {{.Data}};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const dark = () => getComputedStyle(document.documentElement).colorScheme === "dark";
+const fmt = n => n.toLocaleString("en-US");
+const pct = (a, b) => b ? (100 * a / b) : 0;
+const pct1 = (a, b) => pct(a, b).toFixed(1) + "%";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const FORMAT_VARS = { FLAC: "--flac", ALAC: "--alac", MP3: "--lossy", AAC: "--yellow" };
+const fmtBytes = b => b >= 1e12 ? (b / 1e12).toFixed(2) + " TB" : b >= 1e9 ? (b / 1e9).toFixed(b >= 1e11 ? 0 : 1) + " GB" : Math.round(b / 1e6) + " MB";
+const bytesHtml = b => { const [n, u] = fmtBytes(b).split(" "); return `${n}<span class="u">${u}</span>`; };
+const gb = b => +(b / 1e9).toFixed(1);
+const fdate = s => new Date(s + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const linkName = u => u.includes("musicbrainz") ? "MusicBrainz" : "Discogs";
+const line = (r, links) => `${r.artist} - ${r.album || "(no name)"}${links && r.url ? " " + r.url : ""}`;
+const linkTag = u => u ? `<a class="link" href="${esc(u)}" target="_blank" rel="noopener">${linkName(u)}</a>` : "";
+const banks = { u: [], g: [] };
+const reg = (bank, text) => banks[bank].push(text) - 1;
+const copyBtn = (bank, text, label = "Copy") => `<button class="copy" type="button" data-bank="${bank}" data-i="${reg(bank, text)}">${label}</button>`;
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+}
+async function copyWithFeedback(btn, text) {
+  await copyText(text);
+  const old = btn.textContent;
+  btn.textContent = "Copied";
+  setTimeout(() => { btn.textContent = old; }, 1200);
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("button[data-bank]");
+  if (b) copyWithFeedback(b, banks[b.dataset.bank][+b.dataset.i]);
+});
+const rows = (list, group, key, value) => list.map(x => ({ group, key: x[key], value: x[value] }));
+let charts = [];
+
+function kpis() {
+  const t = D.totals, p = D.progress.albums;
+  const k = [
+    [fmt(t.tracks), "Tracks", fmt(t.singletons) + " without album"],
+    [fmt(t.albums), "Albums", ""],
+    [fmt(t.artists), "Album artists", ""],
+    [fmt(Math.round(t.hours)), "Hours of music", (t.hours / 24).toFixed(0) + " days"],
+    [bytesHtml(t.bytes), "Library size", "on disk"],
+    [pct1(p.lossless || 0, t.albums), "Albums lossless", fmt(p.lossless || 0) + " of " + fmt(t.albums)],
+    [fmt(t.hiRes), "Hi-res tracks", "above 16 bit or 48 kHz"],
+  ];
+  document.getElementById("kpis").innerHTML = k.map(([v, l, n]) => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="n">${n || "&nbsp;"}</div></div>`).join("");
+  const i = D.internal;
+  const tbl = n => (i.tables.find(x => x.name === n) || { count: 0 }).count;
+  document.getElementById("facts").innerHTML = [
+    [bytesHtml(i.dbBytes), "Database file"], [fmt(tbl("items")), "Rows in items"], [fmt(tbl("albums")), "Rows in albums"],
+    [fmt(tbl("item_attributes")), "Item attributes"], [fmt(tbl("album_attributes")), "Album attributes"], [fmt(i.duplicateAlbums), "Duplicate album names"], [fmt(t.missingFiles), "Files missing on disk"],
+  ].map(([v, l]) => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
+  document.getElementById("attrs").innerHTML = i.attributes.length
+    ? i.attributes.map(a => `<tr><td class="m">${esc(a.entity)}</td><td>${esc(a.key)}</td><td class="m">${fmt(a.count)}</td></tr>`).join("")
+    : `<tr><td colspan="3" class="empty">No flexible attributes.</td></tr>`;
+  const scanned = `Size on disk, last read from the music folder on ${fdate(D.sizesScanned)}. Read again in full every 30 days.`;
+  document.getElementById("sizeNote").textContent = scanned;
+  document.getElementById("shelf").innerHTML = D.recent.map(r => `
+    <div class="album">
+      <div class="cover">${r.thumb ? `<img src="${esc(r.cover)}" data-fallback="${r.thumb}" alt="Cover of ${esc(r.album)}" onerror="if (this.src !== this.dataset.fallback) this.src = this.dataset.fallback">` : esc((r.album || r.artist || "?").slice(0, 2).toUpperCase())}</div>
+      <div class="meta">
+        <div class="t" title="${esc(r.album)}">${esc(r.album) || "(no name)"}</div>
+        <div class="a" title="${esc(r.artist)}">${esc(r.artist)}</div>
+        <div class="d"><span class="chip ${r.class}">${esc(r.format)}</span>${r.year || ""}</div>
+        <div class="when">Imported ${fdate(r.added)}</div>
+      </div>
+      <div class="acts">${copyBtn("u", line(r, false))}${linkTag(r.url)}</div>
+    </div>`).join("");
+  const artistText = (l, links) => l.albums.map(r => line(r, links)).join("\n");
+  document.getElementById("lossyArtists").innerHTML = D.lossyArtists.map(l => `<tr>
+    <td>${esc(l.artist)}</td><td class="m">${l.albums.length} of ${l.total}</td>
+    <td class="albums-cell">${l.albums.map(r => esc(r.album) || "(no name)").join(" · ")}</td>
+    <td class="act">${copyBtn("u", artistText(l, false))}${copyBtn("u", artistText(l, true), "Copy with links")}</td></tr>`).join("");
+  document.getElementById("copyAllArtists").onclick = e => copyWithFeedback(e.currentTarget, D.lossyArtists.map(l => artistText(l, false)).join("\n"));
+  document.getElementById("copyAllArtistsLinks").onclick = e => copyWithFeedback(e.currentTarget, D.lossyArtists.map(l => artistText(l, true)).join("\n"));
+  document.getElementById("bigLeft").textContent = fmt(t.albums - (p.lossless || 0));
+  document.getElementById("progressTitle").textContent = `of ${fmt(t.albums)} albums are not lossless yet`;
+}
+
+// Same colors in every chart: color follows the entity.
+function palette() {
+  const c = {};
+  for (const [name, v] of [["Lossless", "--flac"], ["Lossy", "--lossy"], ["Lossy and mixed", "--lossy"], ["Mixed", "--mixed"], ["FLAC", "--flac"], ["ALAC", "--alac"], ["MP3", "--lossy"], ["AAC", "--yellow"],
+    ["Albums lossless", "--flac"], ["Tracks lossless", "--violet"], ["Albums", "--flac"], ["Tracks", "--flac"], ["Complete", "--flac"], ["Total", "--violet"], ["Library size", "--flac"]]) c[name] = css(v);
+  return c;
+}
+
+function make(Type, id, data, options) {
+  const holder = document.getElementById(id);
+  holder.innerHTML = "";
+  charts.push(new Charts[Type](holder, { data, options: { theme: dark() ? "g90" : "white", resizable: true, animations: false, color: { scale: palette() }, ...options } }));
+}
+
+const labelAxis = (position, extra = {}) => ({ [position]: { mapsTo: "key", scaleType: "labels", ...extra } });
+const valueAxis = (position, extra = {}) => ({ [position]: { mapsTo: "value", ...extra } });
+
+function drawCharts() {
+  charts.forEach(c => c.destroy());
+  charts = [];
+  const t = D.totals;
+
+  const meter = (id, unit, count, total) => make("MeterChart", id, [{ group: "Lossless", value: +pct(count, total).toFixed(1) }],
+    { height: "90px", toolbar: { enabled: false }, title: `${fmt(count)} of ${fmt(total)} ${unit} lossless`, meter: { peak: 100 } });
+  meter("meterAlbums", "albums", D.progress.albums.lossless || 0, t.albums);
+  meter("meterTracks", "tracks", D.progress.tracks.lossless || 0, t.tracks);
+
+  const h = D.history;
+  const share = (k, total) => h.map(s => +pct(s[k], s[total]).toFixed(1));
+  const low = Math.min(100, ...share("losslessAlbums", "albums"), ...share("losslessTracks", "tracks"));
+  document.getElementById("historyNote").textContent = h.length < 2
+    ? "One snapshot so far. Every run of the report adds one, so the trend appears over time."
+    : "Lossless share per report run, one point per day.";
+  make("LineChart", "history",
+    [...h.map(s => ({ group: "Albums lossless", key: s.day, value: pct(s.losslessAlbums, s.albums) })), ...h.map(s => ({ group: "Tracks lossless", key: s.day, value: pct(s.losslessTracks, s.tracks) }))],
+    { height: "260px", axes: { ...labelAxis("bottom", { title: "Snapshot" }), ...valueAxis("left", { title: "Lossless share", domain: [Math.max(0, Math.floor(low / 5) * 5 - 5), 100], ticks: { formatter: v => v + "%" } }) }, points: { enabled: true, radius: 4 }, legend: { position: "bottom" }, tooltip: { valueFormatter: v => v.toFixed(1) + "%" } });
+
+  make("LineChart", "historySize", h.map(s => ({ group: "Library size", key: s.day, value: gb(s.bytes) })),
+    { height: "260px", axes: { ...labelAxis("bottom", { title: "Snapshot" }), ...valueAxis("left", { title: "Size (GB)" }) }, points: { enabled: true, radius: 4 }, legend: { enabled: false }, tooltip: { valueFormatter: v => v + " GB" } });
+
+  make("DonutChart", "sizeFormats", D.formats.map(f => ({ group: f.name, value: gb(f.bytes) })),
+    { height: "300px", donut: { center: { label: "GB", number: gb(t.bytes) }, alignment: "center" }, legend: { position: "bottom" }, toolbar: { enabled: false }, tooltip: { valueFormatter: v => v + " GB" } });
+  make("LineChart", "growth", D.growth.flatMap(g => [
+    { group: "Total", key: g.month, value: gb(g.lossless + g.lossy) }, { group: "Lossless", key: g.month, value: gb(g.lossless) }, { group: "Lossy", key: g.month, value: gb(g.lossy) }]),
+    { height: "300px", axes: { ...labelAxis("bottom", { title: "Month" }), ...valueAxis("left", { title: "Size (GB)" }) }, points: { enabled: true, radius: 3 }, legend: { position: "bottom" }, tooltip: { valueFormatter: v => v + " GB" } });
+
+  make("DonutChart", "formats", D.formats.map(f => ({ group: f.name, value: f.count })),
+    { height: "260px", donut: { center: { label: "tracks", number: t.tracks }, alignment: "center" }, legend: { position: "bottom" }, toolbar: { enabled: false } });
+
+  make("StackedBarChart", "bitrate", D.lossyBitrate.series.flatMap(s => D.lossyBitrate.labels.map((l, i) => ({ group: s.name, key: l, value: s.values[i] }))),
+    { height: "260px", axes: { ...labelAxis("bottom", { title: "Bitrate (kbps)" }), ...valueAxis("left", { title: "Tracks", stacked: true }) }, legend: { position: "bottom" }, bars: { maxWidth: 28 } });
+
+  make("SimpleBarChart", "quality", rows(D.quality.slice().reverse(), "Tracks", "name", "count"),
+    { height: "260px", axes: { ...labelAxis("left", { title: "Resolution", truncation: { type: "none" } }), ...valueAxis("bottom", { title: "Tracks" }) }, legend: { enabled: false }, bars: { maxWidth: 18 } });
+
+  const nodes = [...D.formats.map(f => ({ name: f.name })), { name: "Lossless" }, { name: "Lossy" }];
+  make("AlluvialChart", "flow", D.formats.map(f => ({ source: f.name, target: f.lossless ? "Lossless" : "Lossy", value: f.count })),
+    { height: "400px", alluvial: { nodes, nodeAlignment: "center" }, legend: { enabled: false } });
+
+  const classRows = list => list.flatMap(g => [{ group: "Lossless", key: g.name, value: g.lossless }, { group: "Lossy and mixed", key: g.name, value: g.lossy }]);
+  make("StackedBarChart", "years", classRows(D.years),
+    { height: "300px", axes: { ...labelAxis("bottom", { title: "Release year" }), ...valueAxis("left", { title: "Albums", stacked: true }) }, legend: { position: "bottom" }, bars: { maxWidth: 22 } });
+  make("StackedBarChart", "artists", classRows(D.artists.slice().reverse()),
+    { height: "420px", axes: { ...labelAxis("left", { title: "Artist", truncation: { type: "none" } }), ...valueAxis("bottom", { title: "Albums", stacked: true }) }, legend: { position: "bottom" }, bars: { maxWidth: 18 } });
+
+  const added = D.added.slice().sort((a, b) => b.count - a.count);
+  const bulk = added.length > 2 && added[0].count > 5 * added[1].count ? added[0] : null;
+  document.getElementById("addedNote").textContent = bulk
+    ? `Date beets imported the album. The first import (${bulk.name}, ${fmt(bulk.count)} albums) is left out.`
+    : "Date beets imported the album.";
+  make("SimpleBarChart", "added", rows(D.added.filter(a => a !== bulk), "Albums", "name", "count"),
+    { height: "420px", axes: { ...labelAxis("bottom", { title: "Month added" }), ...valueAxis("left", { title: "Albums" }) }, legend: { enabled: false }, bars: { maxWidth: 22 } });
+
+  make("SimpleBarChart", "albumSizes", rows(D.albumSizes, "Albums", "name", "count"),
+    { height: "380px", axes: { ...labelAxis("bottom", { title: "Tracks per album" }), ...valueAxis("left", { title: "Albums" }) }, legend: { enabled: false }, bars: { maxWidth: 28 } });
+
+  const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const perDay = new Map(D.addedDays.map(c => [c.name, c.count]));
+  const end = new Date(D.generated.slice(0, 10) + "T00:00:00");
+  const start = new Date(end);
+  start.setDate(start.getDate() - 7 * 52);
+  start.setDate(start.getDate() - (start.getDay() + 6) % 7);
+  const busy = D.addedDays.map(c => c.count).sort((a, b) => a - b);
+  const cap = Math.max(1, busy[Math.floor(busy.length * 0.9)] || 1);
+  const cal = [];
+  for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const wd = (d.getDay() + 6) % 7;
+    const monday = new Date(d);
+    monday.setDate(monday.getDate() - wd);
+    cal.push({ week: iso(monday), day: names[wd], value: Math.min(perDay.get(iso(d)) || 0, cap) });
+  }
+  make("HeatmapChart", "calendar", cal, {
+    height: "260px", toolbar: { enabled: false },
+    axes: { bottom: { title: "Week starting", mapsTo: "week", scaleType: "labels", ticks: { formatter: v => (+v.slice(8) <= 7 ? new Date(v + "T00:00:00").toLocaleDateString("en-GB", { month: "short" }) : "") } }, left: { title: "Weekday", mapsTo: "day", scaleType: "labels", domain: names.slice().reverse() } },
+    heatmap: { colorLegend: { title: `Albums imported (${cap}+ shown as ${cap})` } },
+    color: { gradient: { enabled: true, colors: dark() ? ["#333333", "#1c5cab", "#2a78d6", "#3987e5", "#86b6ef"] : ["#ececec", "#c5dcf7", "#86b6ef", "#3987e5", "#1c5cab"] } },
+  });
+
+  make("StackedBarChart", "types", classRows(D.albumTypes.slice().reverse()),
+    { height: "380px", axes: { ...labelAxis("left", { title: "Album type", truncation: { type: "none" } }), ...valueAxis("bottom", { title: "Albums", stacked: true }) }, legend: { position: "bottom" }, bars: { maxWidth: 18 } });
+  make("StackedBarChart", "labels", classRows(D.labels.slice().reverse()),
+    { height: "380px", axes: { ...labelAxis("left", { title: "Label", truncation: { type: "none" } }), ...valueAxis("bottom", { title: "Albums", stacked: true }) }, legend: { position: "bottom" }, bars: { maxWidth: 18 } });
+
+  make("TreemapChart", "genres", [
+    { name: "Lossless", children: D.genres.filter(g => g.lossless).map(g => ({ name: g.name, value: g.lossless, showLabel: true })) },
+    { name: "Lossy", children: D.genres.filter(g => g.lossy).map(g => ({ name: g.name, value: g.lossy, showLabel: true })) },
+  ], { height: "380px", legend: { enabled: false } });
+
+  make("SimpleBarChart", "fields", D.internal.fields.slice().reverse().map(c => ({ group: "Complete", key: c.label, value: +pct(c.total - c.missing, c.total).toFixed(1) })),
+    { height: "420px", axes: { ...labelAxis("left", { title: "Field", truncation: { type: "none" } }), ...valueAxis("bottom", { title: "Tracks with value", domain: [0, 100], ticks: { formatter: v => v + "%" } }) }, legend: { enabled: false }, bars: { maxWidth: 16 }, tooltip: { valueFormatter: v => v + "%" } });
+
+  make("SimpleBarChart", "checks", D.checks.slice().reverse().map(c => ({ group: "Complete", key: c.label, value: +pct(c.total - c.missing, c.total).toFixed(1) })),
+    { height: "380px", axes: { ...labelAxis("left", { title: "Field", truncation: { type: "none" } }), ...valueAxis("bottom", { title: "Complete", domain: [0, 100], ticks: { formatter: v => v + "%" } }) }, legend: { enabled: false }, bars: { maxWidth: 16 }, tooltip: { valueFormatter: v => v + "%" } });
+}
+
+let active = 0;
+function gaps() {
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML = D.gaps.map((g, i) => `<button type="button" role="tab" data-i="${i}" aria-selected="${i === active}">${g.label}<span>${fmt(g.count)}</span></button>`).join("");
+  tabs.onclick = e => { const b = e.target.closest("button"); if (b) { active = +b.dataset.i; gaps(); } };
+  const g = D.gaps[active], q = document.getElementById("filter").value.trim().toLowerCase();
+  document.getElementById("gapHint").textContent = g.hint;
+  const list = g.rows.filter(r => !q || (r.artist + " " + r.album).toLowerCase().includes(q));
+  banks.g = [];
+  document.getElementById("rows").innerHTML = list.length
+    ? list.map(r => `<tr><td>${esc(r.artist)}</td><td>${esc(r.album) || "(empty)"}</td><td class="m">${r.year || ""}</td><td class="m">${esc(r.format)}</td><td class="m">${esc(r.detail)}</td><td class="act">${copyBtn("g", line(r, false))}${linkTag(r.url)}</td></tr>`).join("")
+    : `<tr><td colspan="6" class="empty">Nothing here.</td></tr>`;
+  document.getElementById("copyShown").onclick = e => copyWithFeedback(e.currentTarget, list.map(r => line(r, false)).join("\n"));
+  document.getElementById("copyShownLinks").onclick = e => copyWithFeedback(e.currentTarget, list.map(r => line(r, true)).join("\n"));
+  document.getElementById("shown").textContent = g.count > g.rows.length ? `${fmt(list.length)} shown, ${fmt(g.count)} in total` : `${fmt(list.length)} rows`;
+}
+
+document.getElementById("filter").addEventListener("input", gaps);
+kpis(); gaps();
+if (typeof Charts === "undefined") {
+  document.getElementById("notice").style.display = "block";
+} else {
+  drawCharts();
+  document.getElementById("theme").addEventListener("click", () => {
+    document.documentElement.dataset.theme = dark() ? "light" : "dark";
+    drawCharts();
+  });
+}
+</script>
+</body>
+</html>

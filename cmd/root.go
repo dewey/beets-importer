@@ -99,6 +99,7 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(maintenanceCmd)
+	rootCmd.AddCommand(reportCmd)
 }
 
 // Path flags have no defaults, so a wrong path is never used silently. They
@@ -128,6 +129,7 @@ func applyConfigToFlags(cfg config.Config, fs *pflag.FlagSet) {
 		{"source", cfg.Source},
 		{"beet", cfg.Beet},
 		{"state-file", cfg.StateFile},
+		{"output", cfg.ReportOutput},
 		{"verbose", boolFlag(cfg.Verbose)},
 		{"no-cache", boolFlag(cfg.NoCache)},
 	}

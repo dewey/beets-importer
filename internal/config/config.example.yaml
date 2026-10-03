@@ -22,6 +22,9 @@
 # in your beets config. It is state.pickle in your beets config directory.
 # state_file: ~/.config/beets/state.pickle
 #
+# Folder that 'report' writes index.html to.
+# report_output: ~/Music/report
+#
 # ── Optional ──────────────────────────────────────────────────────────────────
 # Leave these commented out to use the defaults.
 #

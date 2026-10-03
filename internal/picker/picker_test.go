@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -22,7 +23,6 @@ func sendKey(m Model, key string) Model {
 	next, _ := m.Update(tea.KeyPressMsg{Code: []rune(key)[0], Text: key})
 	return next.(Model)
 }
-
 
 func TestNew(t *testing.T) {
 	m := New(albums("A", "B", "C"))
@@ -534,5 +534,91 @@ func TestDisabledItemsCannotBeSelected(t *testing.T) {
 	m = next.(Model)
 	if sel := m.Selected(); len(sel) != 1 || sel[0].Key != "split_imports" {
 		t.Errorf("ctrl+a selected %v, want only split_imports", sel)
+	}
+}
+
+func ignoringModel(names ...string) Model {
+	m := New(albums(names...))
+	m.IgnoreFeature = "upgrades"
+	return m
+}
+
+func TestIgnoreTogglesSelectedAndUnselects(t *testing.T) {
+	m := ignoringModel("A", "B")
+	m = sendKey(m, " ")
+	m = sendKey(m, "x")
+
+	if !m.Items()[0].Ignored || m.Items()[1].Ignored {
+		t.Fatalf("only A must be ignored: %+v", m.Items())
+	}
+	if m.numSelected() != 0 {
+		t.Error("ignored items must be unselected")
+	}
+	if len(m.Items()) != 2 {
+		t.Error("ignored items must stay in the list")
+	}
+}
+
+func TestIgnoreUndoBySelectingAgain(t *testing.T) {
+	m := ignoringModel("A")
+	m = sendKey(m, " ")
+	m = sendKey(m, "x")
+	m = sendKey(m, " ")
+	if !m.items[0].selected {
+		t.Fatal("an ignored item must be selectable")
+	}
+	m = sendKey(m, "x")
+	if m.Items()[0].Ignored || m.numSelected() != 0 {
+		t.Errorf("x on a selected ignored item must unignore and unselect: %+v", m.Items()[0])
+	}
+}
+
+func TestIgnoreNeedsSelection(t *testing.T) {
+	m := sendKey(ignoringModel("A"), "x")
+	if m.Items()[0].Ignored {
+		t.Error("x without a selection must do nothing")
+	}
+}
+
+func TestIgnoreOffWithoutFeature(t *testing.T) {
+	m := New(albums("A"))
+	m = sendKey(m, " ")
+	m = sendKey(m, "x")
+	if m.Items()[0].Ignored || !m.items[0].selected {
+		t.Error("x must do nothing when IgnoreFeature is empty")
+	}
+}
+
+func TestIgnoredNeverReturnedBySelected(t *testing.T) {
+	m := ignoringModel("A", "B")
+	m = sendKey(m, " ")
+	m = sendKey(m, "x")
+	m = sendKey(m, " ")
+	if got := m.Selected(); len(got) != 0 {
+		t.Errorf("ignored item must not be returned, got %v", got)
+	}
+}
+
+func TestSelectAllSkipsIgnored(t *testing.T) {
+	m := ignoringModel("A", "B")
+	m = sendKey(m, " ")
+	m = sendKey(m, "x")
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
+	m = next.(Model)
+	if m.items[0].selected || !m.items[1].selected {
+		t.Errorf("ctrl+a must skip ignored items: %+v", m.items)
+	}
+}
+
+func TestViewMarksIgnored(t *testing.T) {
+	m := ignoringModel("A", "B")
+	m = sendKey(m, " ")
+	m = sendKey(m, "x")
+	out := m.render()
+	if !strings.Contains(out, "[⊘]") {
+		t.Error("ignored item must show the ignored marker")
+	}
+	if !strings.Contains(out, "1 ignored") || !strings.Contains(out, "X ignore in upgrades") {
+		t.Errorf("status and hint missing:\n%s", out)
 	}
 }

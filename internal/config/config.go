@@ -54,15 +54,17 @@ type NavidromeConfig struct {
 // Config holds settings loaded from the config file.
 // Keys use underscores to follow YAML convention; flag names use hyphens.
 type Config struct {
-	DB        string          `yaml:"db"`
-	Source    string          `yaml:"source"`
-	Beet      string          `yaml:"beet"`
-	StateFile string          `yaml:"state_file"`
-	Verbose   bool            `yaml:"verbose"`
-	NoCache   bool            `yaml:"no_cache"`
-	Doctor    DoctorConfig    `yaml:"doctor"`
-	Ignore    IgnoreConfig    `yaml:"ignore"`
-	Navidrome NavidromeConfig `yaml:"navidrome"`
+	DB        string `yaml:"db"`
+	Source    string `yaml:"source"`
+	Beet      string `yaml:"beet"`
+	StateFile string `yaml:"state_file"`
+	// ReportOutput is the folder that report writes index.html to.
+	ReportOutput string          `yaml:"report_output"`
+	Verbose      bool            `yaml:"verbose"`
+	NoCache      bool            `yaml:"no_cache"`
+	Doctor       DoctorConfig    `yaml:"doctor"`
+	Ignore       IgnoreConfig    `yaml:"ignore"`
+	Navidrome    NavidromeConfig `yaml:"navidrome"`
 }
 
 // DefaultPath returns the default config file location for the current OS.
@@ -93,6 +95,7 @@ func Load(path string) (cfg Config, found bool, err error) {
 	cfg.Source = ExpandPath(cfg.Source)
 	cfg.Beet = ExpandPath(cfg.Beet)
 	cfg.StateFile = ExpandPath(cfg.StateFile)
+	cfg.ReportOutput = ExpandPath(cfg.ReportOutput)
 	return cfg, true, nil
 }
 
