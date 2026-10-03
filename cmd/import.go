@@ -29,11 +29,11 @@ var (
 	flagImportLimit    int
 	flagImportSince    string
 	flagImportReimport bool
-	flagImportLibrary  bool
+	flagImportRetag    bool
 	flagImportPlaylist string
 )
 
-// retagField is set on every album retagged with --library or maintenance,
+// retagField is set on every album retagged with --retag or maintenance,
 // and skipField on every album skipped at the beets prompt. beets keeps both,
 // so later runs leave those albums out.
 const (
@@ -53,6 +53,7 @@ func init() {
 	addDBFlag(importCmd)
 	addSourceFlag(importCmd)
 	addBeetFlag(importCmd)
+	addDataDirFlag(importCmd)
 	addScanFlags(importCmd)
 	importCmd.Flags().StringVar(&flagStateFile, "state-file", "",
 		"Path to the beets incremental state file (state.pickle); folders beets already processed are skipped")
@@ -64,21 +65,21 @@ func init() {
 		"Only show albums added on or after this date (YYYY-MM-DD)")
 	importCmd.Flags().BoolVar(&flagImportReimport, "reimport", false,
 		"Also list folders beets already processed, and run beet with --noincremental so it imports them again")
-	importCmd.Flags().BoolVar(&flagImportLibrary, "library", false,
+	importCmd.Flags().BoolVar(&flagImportRetag, "retag", false,
 		"Retag library albums with 'beet import -L'; album IDs come from --from-file or --from-playlist")
 	importCmd.Flags().StringVar(&flagImportPlaylist, "from-playlist", "",
-		"With --library, retag every album that has a track in this Navidrome playlist ID")
+		"With --retag, retag every album that has a track in this Navidrome playlist ID")
 	importCmd.MarkFlagsMutuallyExclusive("from-file", "since")
 	importCmd.MarkFlagsMutuallyExclusive("from-file", "from-playlist")
-	importCmd.MarkFlagsMutuallyExclusive("library", "reimport")
+	importCmd.MarkFlagsMutuallyExclusive("retag", "reimport")
 }
 
 func runImport(_ *cobra.Command, _ []string) error {
-	if flagImportLibrary {
+	if flagImportRetag {
 		return runRetag()
 	}
 	if flagImportPlaylist != "" {
-		return fmt.Errorf("--from-playlist needs --library")
+		return fmt.Errorf("--from-playlist needs --retag")
 	}
 	if flagImportFile != "" {
 		return runImportFromFile()
@@ -120,15 +121,20 @@ func runImportLatest() error {
 		return err
 	}
 
-	spinMsg.Store("Filtering unimported albums…")
-	stop = startSpinner(&spinMsg)
-
 	var scanCache *source.ScanCache
 	if !flagNoCache {
-		if cachePath, err := source.DefaultCachePath(); err == nil {
-			scanCache, _ = source.LoadCache(cachePath)
+		var cachePath string
+		cachePath, err = dataPath("scan-cache.json")
+		if err != nil {
+			return err
+		}
+		if scanCache, err = source.LoadCache(cachePath); err != nil {
+			return err
 		}
 	}
+
+	spinMsg.Store("Filtering unimported albums…")
+	stop = startSpinner(&spinMsg)
 
 	limit := flagImportLimit
 	if limit == 0 {
@@ -349,7 +355,7 @@ func readAlbumIDs(r io.Reader) ([]int, error) {
 
 func runRetag() error {
 	if flagImportFile == "" && flagImportPlaylist == "" {
-		return fmt.Errorf("--library needs --from-file with a list of album IDs, or --from-playlist")
+		return fmt.Errorf("--retag needs --from-file with a list of album IDs, or --from-playlist")
 	}
 	if err := requireFlag("db", flagDB); err != nil {
 		return err

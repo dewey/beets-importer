@@ -5,7 +5,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -15,7 +14,6 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/dewey/beets-importer/internal/beets"
 	"github.com/dewey/beets-importer/internal/compare"
-	"github.com/dewey/beets-importer/internal/config"
 	"github.com/dewey/beets-importer/internal/ignore"
 	"github.com/dewey/beets-importer/internal/matcher"
 	"github.com/dewey/beets-importer/internal/picker"
@@ -30,7 +28,7 @@ var (
 	flagUpgradesMinBitrateDelta  int
 	flagUpgradesAll              bool
 	flagUpgradesLimit            int
-	flagUpgradesOutput           string
+	flagUpgradesCSV              string
 	flagUpgradesRequireYearMatch bool
 	flagUpgradesLibraryFormat    []string
 	flagUpgradesSourceFormat     []string
@@ -54,6 +52,7 @@ func init() {
 	addDBFlag(upgradesCmd)
 	addSourceFlag(upgradesCmd)
 	addBeetFlag(upgradesCmd)
+	addDataDirFlag(upgradesCmd)
 	addScanFlags(upgradesCmd)
 	upgradesCmd.Flags().Float64Var(&flagUpgradesThreshold, "threshold", 0.70,
 		"Minimum match confidence (0..1) to consider a source→library pair")
@@ -63,8 +62,8 @@ func init() {
 		"Show all matched pairs, not just upgrade candidates")
 	upgradesCmd.Flags().IntVar(&flagUpgradesLimit, "limit", 0,
 		"Stop after collecting this many upgrade candidates (0 = no limit)")
-	upgradesCmd.Flags().StringVarP(&flagUpgradesOutput, "output", "o", "",
-		"Write source paths to this file instead of printing a table (pass to beets-importer import --from-file)")
+	upgradesCmd.Flags().StringVar(&flagUpgradesCSV, "csv", "",
+		"Write the candidates to this CSV file instead of printing a table (pass to beets-importer import --from-file)")
 	upgradesCmd.Flags().BoolVar(&flagUpgradesRequireYearMatch, "require-year-match", false,
 		"Skip candidates where both source and library have a known year that differs")
 	upgradesCmd.Flags().StringSliceVar(&flagUpgradesLibraryFormat, "library-format", nil,
@@ -348,15 +347,19 @@ func runUpgrades(_ *cobra.Command, _ []string) error {
 
 	var scanCache *source.ScanCache
 	if !flagNoCache {
-		if cachePath, err := source.DefaultCachePath(); err == nil {
-			scanCache, _ = source.LoadCache(cachePath)
+		cachePath, err := dataPath("scan-cache.json")
+		if err != nil {
+			return err
+		}
+		if scanCache, err = source.LoadCache(cachePath); err != nil {
+			return err
 		}
 	}
-	configPath, err := config.DefaultPath()
+	ignorePath, err := dataPath("ignore.json")
 	if err != nil {
 		return err
 	}
-	ignores, err := ignore.Load(filepath.Join(filepath.Dir(configPath), "ignore.json"))
+	ignores, err := ignore.Load(ignorePath)
 	if err != nil {
 		return err
 	}
@@ -411,9 +414,9 @@ func runUpgrades(_ *cobra.Command, _ []string) error {
 			"(stopped after %d candidates — re-run without --limit to scan everything)", flagUpgradesLimit)))
 	}
 
-	// --output: write a CSV with all candidate details
-	if flagUpgradesOutput != "" {
-		f, err := os.Create(flagUpgradesOutput)
+	// --csv: write a CSV with all candidate details
+	if flagUpgradesCSV != "" {
+		f, err := os.Create(flagUpgradesCSV)
 		if err != nil {
 			return fmt.Errorf("create output file: %w", err)
 		}
@@ -456,7 +459,7 @@ func runUpgrades(_ *cobra.Command, _ []string) error {
 			return fmt.Errorf("writing CSV: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "%s Written %d candidates to %s\n",
-			styleFound.Render("✓"), len(result.candidates), flagUpgradesOutput)
+			styleFound.Render("✓"), len(result.candidates), flagUpgradesCSV)
 		return nil
 	}
 

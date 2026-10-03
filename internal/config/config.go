@@ -58,6 +58,9 @@ type Config struct {
 	Source    string `yaml:"source"`
 	Beet      string `yaml:"beet"`
 	StateFile string `yaml:"state_file"`
+	// DataDir holds the ignore list, report store and scan cache. Empty means
+	// a folder next to the beets database.
+	DataDir string `yaml:"data_dir"`
 	// ReportOutput is the folder that report writes index.html to.
 	ReportOutput string          `yaml:"report_output"`
 	Verbose      bool            `yaml:"verbose"`
@@ -95,6 +98,7 @@ func Load(path string) (cfg Config, found bool, err error) {
 	cfg.Source = ExpandPath(cfg.Source)
 	cfg.Beet = ExpandPath(cfg.Beet)
 	cfg.StateFile = ExpandPath(cfg.StateFile)
+	cfg.DataDir = ExpandPath(cfg.DataDir)
 	cfg.ReportOutput = ExpandPath(cfg.ReportOutput)
 	return cfg, true, nil
 }

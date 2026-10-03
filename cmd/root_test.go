@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/dewey/beets-importer/internal/config"
@@ -135,5 +137,73 @@ func TestApplyConfigToFlagsSkipsMissingFlags(t *testing.T) {
 	applyConfigToFlags(config.Config{DB: "/config/db.db", Source: "/config/source"}, pf)
 	if *db != "/config/db.db" {
 		t.Errorf("db = %q, want /config/db.db", *db)
+	}
+}
+
+func TestDataPath(t *testing.T) {
+	defer func(db, dir string) { flagDB, flagDataDir = db, dir }(flagDB, flagDataDir)
+
+	flagDB, flagDataDir = "/music/Library/lib.db", ""
+	got, err := dataPath("store.db")
+	if err != nil || got != "/music/Library/beets-importer/store.db" {
+		t.Errorf("default = %q, %v", got, err)
+	}
+
+	flagDataDir = "/data"
+	if got, _ = dataPath("store.db"); got != "/data/store.db" {
+		t.Errorf("explicit = %q", got)
+	}
+
+	flagDB, flagDataDir = "", ""
+	if _, err = dataPath("store.db"); err == nil {
+		t.Error("want error without db and data dir")
+	}
+}
+
+func fakeBeet(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	script := "#!/bin/sh\nif [ \"$2\" = -p ]; then echo " + dir + "/config.yaml; else printf 'library: lib.db\\nstatefile: state.pickle\\n'; fi\n"
+	if err := os.WriteFile(filepath.Join(dir, "beet"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestApplyBeetsDefaults(t *testing.T) {
+	dir := fakeBeet(t)
+	t.Setenv("PATH", dir)
+	pf, db, _, beet, state, _, _ := newTestFlagSet()
+
+	if err := applyBeetsDefaults(pf); err != nil {
+		t.Fatal(err)
+	}
+	if *beet != filepath.Join(dir, "beet") || *db != filepath.Join(dir, "lib.db") || *state != filepath.Join(dir, "state.pickle") {
+		t.Errorf("beet=%q db=%q state=%q", *beet, *db, *state)
+	}
+}
+
+func TestApplyBeetsDefaultsKeepsSetValues(t *testing.T) {
+	t.Setenv("PATH", fakeBeet(t))
+	pf, db, _, _, _, _, _ := newTestFlagSet()
+	if err := pf.Set("db", "/mine.db"); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyBeetsDefaults(pf); err != nil {
+		t.Fatal(err)
+	}
+	if *db != "/mine.db" {
+		t.Errorf("db = %q, want /mine.db", *db)
+	}
+}
+
+func TestApplyBeetsDefaultsNoBeet(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	pf, db, _, beet, _, _, _ := newTestFlagSet()
+	if err := applyBeetsDefaults(pf); err != nil {
+		t.Fatal(err)
+	}
+	if *beet != "" || *db != "" {
+		t.Errorf("beet=%q db=%q, want both empty", *beet, *db)
 	}
 }

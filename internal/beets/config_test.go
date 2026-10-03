@@ -32,3 +32,19 @@ func TestLibraryDirMissing(t *testing.T) {
 		t.Error("expected error when directory is not set")
 	}
 }
+
+func TestReadSettings(t *testing.T) {
+	dir := t.TempDir()
+	beet := filepath.Join(dir, "beet")
+	script := "#!/bin/sh\nif [ \"$2\" = -p ]; then echo " + dir + "/config.yaml; else printf 'library: library.db\\nstatefile: /abs/state.pickle\\n'; fi\n"
+	if err := os.WriteFile(beet, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := beets.ReadSettings(beet)
+	if err != nil {
+		t.Fatalf("ReadSettings() error: %v", err)
+	}
+	if got.Library != filepath.Join(dir, "library.db") || got.StateFile != "/abs/state.pickle" {
+		t.Errorf("got %+v", got)
+	}
+}

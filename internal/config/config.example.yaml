@@ -2,38 +2,44 @@
 # Uncomment and fill in the values for your setup.
 # Run 'beets-importer config show' to verify the result.
 #
-# ── Required ──────────────────────────────────────────────────────────────────
-# These must be set before any command will work.
+# ── Required for 'import' and 'upgrades' ──────────────────────────────────────
 #
-# Path to your beets SQLite database.
-# db: ~/Music/Music Library Beets/Library/musiclibrary.db
-#
-# Directory to scan for new albums and upgrade candidates.
+# Folder with new albums to import or compare with your library.
 # source: ~/Music/Music Library Beets/Inbox
 #
-# Path to the beet binary or a wrapper script.
-# Plain install:  beet: /opt/homebrew/bin/beet
-# uv-based setup: beet: ~/Music/Music Library Beets/beet.sh
-# See https://github.com/dewey/beets-importer#beet-wrapper-script
-# beet: /opt/homebrew/bin/beet
+# ── Taken from beets when not set ─────────────────────────────────────────────
+# beets-importer asks 'beet config' for these. Set one only to override it.
 #
-# beets incremental state file, needed by 'import'. It lists every folder beets
-# already processed, so 'import' can leave them out. Requires 'incremental: yes'
-# in your beets config. It is state.pickle in your beets config directory.
+# beets database. Default: 'library' in your beets config.
+# db: ~/Music/Music Library Beets/Library/musiclibrary.db
+#
+# The beet program, or a wrapper script that calls it. Default: 'beet' on your PATH.
+# See https://github.com/dewey/beets-importer#beet-wrapper-script
+# beet: ~/Music/Music Library Beets/beet.sh
+#
+# beets state file, used by 'import' to skip folders beets already processed.
+# Needs 'incremental: yes' in your beets config. Default: 'statefile' in your
+# beets config.
 # state_file: ~/.config/beets/state.pickle
 #
-# Folder that 'report' writes index.html to.
+# ── Where beets-importer keeps its files ──────────────────────────────────────
+#
+# Folder for the ignore list, the report store and the scan cache.
+# Default: a 'beets-importer' folder next to the beets database.
+# data_dir: ~/Music/Music Library Beets/Library/beets-importer
+#
+# Folder that 'report' writes index.html to. Default: 'report' in the data_dir.
 # report_output: ~/Music/report
 #
-# ── Optional ──────────────────────────────────────────────────────────────────
-# Leave these commented out to use the defaults.
+# ── Scanning ──────────────────────────────────────────────────────────────────
+# Both apply to 'import' and 'upgrades'.
 #
-# Print a warning for every directory that could not be scanned, instead of
-# showing a single summary count at the end. (default: false)
+# Print a warning for every folder that could not be scanned, instead of one
+# count at the end. Default: false
 # verbose: false
 #
-# Skip the scan cache and re-read every directory from disk on each run.
-# Useful after manually moving files. (default: false)
+# Do not use the scan cache and read every folder again. Useful after you moved
+# files by hand. Default: false
 # no_cache: false
 #
 # ── Doctor ────────────────────────────────────────────────────────────────────
@@ -59,7 +65,7 @@
 #
 # ── Ignore ────────────────────────────────────────────────────────────────────
 # Albums that no command suggests or checks: the import picker, 'import
-# --library', 'upgrades' and the doctor linters that read the beets database.
+# --retag', 'upgrades' and the doctor linters that read the beets database.
 # Names are compared without case.
 #
 # ignore:
@@ -67,7 +73,7 @@
 #     - "! random !"
 #
 # ── Navidrome ─────────────────────────────────────────────────────────────────
-# Needed by 'import --library --from-playlist'. Navidrome's music folder must
+# Needed by 'import --retag --from-playlist'. Navidrome's music folder must
 # be the same folder as beets' 'directory:', so track paths line up.
 #
 # navidrome:

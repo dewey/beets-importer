@@ -29,7 +29,7 @@ gaps, recent imports and the progress towards an all-lossless library. The page
 is one file and needs no server.
 
 File sizes and cover images are read from the music folder, which is slow on a
-network share. They are cached in the store next to the config file and read
+network share. They are cached in the store in the data folder and read
 again in full once a month. Files that are new since the last scan are read on
 the next run.
 
@@ -41,7 +41,8 @@ over time. Pass --no-snapshot to leave it out.`,
 
 func init() {
 	addDBFlag(reportCmd)
-	reportCmd.Flags().StringVar(&flagReportOutput, "output", "", "Folder to write index.html to")
+	addDataDirFlag(reportCmd)
+	reportCmd.Flags().StringVar(&flagReportOutput, "output", "", "Folder to write index.html to (default: 'report' in the data folder)")
 	reportCmd.Flags().BoolVar(&flagReportNoSnapshot, "no-snapshot", false, "Do not save a snapshot of this run to the store")
 	reportCmd.Flags().BoolVar(&flagReportRefreshDisk, "refresh-disk", false, "Read all file sizes and cover images from disk again, even if the last scan is recent")
 }
@@ -50,11 +51,18 @@ func runReport(cmd *cobra.Command, _ []string) error {
 	if err := requireFlag("db", flagDB); err != nil {
 		return err
 	}
-	if err := requireFlag("output", flagReportOutput); err != nil {
-		return err
+	if flagReportOutput == "" {
+		var err error
+		if flagReportOutput, err = dataPath("report"); err != nil {
+			return err
+		}
 	}
 
-	st, err := store.Open(storePath())
+	storeFile, err := dataPath("store.db")
+	if err != nil {
+		return err
+	}
+	st, err := store.Open(storeFile)
 	if err != nil {
 		return err
 	}
@@ -110,9 +118,4 @@ func runReport(cmd *cobra.Command, _ []string) error {
 	}
 	fmt.Fprintf(os.Stderr, "Wrote report to %s\n", out)
 	return nil
-}
-
-// storePath is the store database, next to the config file so --config moves both.
-func storePath() string {
-	return filepath.Join(filepath.Dir(loadedConfigPath), "store.db")
 }

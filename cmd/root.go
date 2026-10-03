@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/dewey/beets-importer/internal/beets"
 	"github.com/dewey/beets-importer/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -21,6 +23,7 @@ var (
 	flagSource    string
 	flagBeet      string
 	flagStateFile string
+	flagDataDir   string
 	flagVerbose   bool
 	flagNoCache   bool
 	flagConfig    string
@@ -79,7 +82,7 @@ var rootCmd = &cobra.Command{
 		if found {
 			applyConfigToFlags(cfg, cmd.Flags())
 		}
-		return nil
+		return applyBeetsDefaults(cmd.Flags())
 	},
 }
 
@@ -112,6 +115,23 @@ func addSourceFlag(c *cobra.Command) {
 	c.Flags().StringVar(&flagSource, "source", "", "Source music directory to scan")
 }
 
+func addDataDirFlag(c *cobra.Command) {
+	c.Flags().StringVar(&flagDataDir, "data-dir", "", "Folder for the files beets-importer keeps (default: 'beets-importer' next to the beets database)")
+}
+
+// dataPath returns the path of a file in the data folder. The folder defaults
+// to one next to the beets database, so it follows the library when it moves.
+func dataPath(name string) (string, error) {
+	dir := flagDataDir
+	if dir == "" {
+		if err := requireFlag("db", flagDB); err != nil {
+			return "", err
+		}
+		dir = filepath.Join(filepath.Dir(flagDB), "beets-importer")
+	}
+	return filepath.Join(dir, name), nil
+}
+
 func addBeetFlag(c *cobra.Command) {
 	c.Flags().StringVar(&flagBeet, "beet", "", "Path to beet binary or wrapper script")
 }
@@ -129,6 +149,7 @@ func applyConfigToFlags(cfg config.Config, fs *pflag.FlagSet) {
 		{"source", cfg.Source},
 		{"beet", cfg.Beet},
 		{"state-file", cfg.StateFile},
+		{"data-dir", cfg.DataDir},
 		{"output", cfg.ReportOutput},
 		{"verbose", boolFlag(cfg.Verbose)},
 		{"no-cache", boolFlag(cfg.NoCache)},
@@ -140,6 +161,39 @@ func applyConfigToFlags(cfg config.Config, fs *pflag.FlagSet) {
 		}
 		_ = fs.Set(v.name, v.val)
 	}
+}
+
+// applyBeetsDefaults fills the flags still empty from the beets install: the
+// beet binary on PATH, then the database and state file beet reports. Nothing
+// is guessed: if beet is not found the flags stay empty and requireFlag says so.
+func applyBeetsDefaults(fs *pflag.FlagSet) error {
+	empty := func(name string) *pflag.Flag {
+		if f := fs.Lookup(name); f != nil && f.Value.String() == "" {
+			return f
+		}
+		return nil
+	}
+	if f := empty("beet"); f != nil {
+		if p, err := exec.LookPath("beet"); err == nil {
+			_ = f.Value.Set(p)
+		}
+	}
+	db, state := empty("db"), empty("state-file")
+	beetFlag := fs.Lookup("beet")
+	if (db == nil && state == nil) || beetFlag == nil || beetFlag.Value.String() == "" {
+		return nil
+	}
+	s, err := beets.ReadSettings(beetFlag.Value.String())
+	if err != nil {
+		return err
+	}
+	if db != nil {
+		_ = db.Value.Set(s.Library)
+	}
+	if state != nil {
+		_ = state.Value.Set(s.StateFile)
+	}
+	return nil
 }
 
 // boolFlag returns "" for false so a false config value never overrides a flag.

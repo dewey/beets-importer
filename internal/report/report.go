@@ -380,7 +380,10 @@ func (d *Data) fillAlbums(albums map[int]*album, singletons []GapRow, noTitle, n
 		if list[i].artist != list[j].artist {
 			return strings.ToLower(list[i].artist) < strings.ToLower(list[j].artist)
 		}
-		return strings.ToLower(list[i].name) < strings.ToLower(list[j].name)
+		if !strings.EqualFold(list[i].name, list[j].name) {
+			return strings.ToLower(list[i].name) < strings.ToLower(list[j].name)
+		}
+		return list[i].id < list[j].id
 	})
 
 	years := map[int]*Group{}

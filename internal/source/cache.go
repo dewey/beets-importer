@@ -21,17 +21,6 @@ type ScanCache struct {
 	entries map[string]Album
 }
 
-// DefaultCachePath returns the default location for the scan cache file.
-// On macOS this is ~/Library/Caches/beets-importer/scan-cache.json.
-// On Linux it is ~/.cache/beets-importer/scan-cache.json.
-func DefaultCachePath() (string, error) {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		return "", fmt.Errorf("user cache dir: %w", err)
-	}
-	return filepath.Join(dir, "beets-importer", "scan-cache.json"), nil
-}
-
 // LoadCache loads the cache from path. If the file does not exist an empty
 // cache is returned. If the file is corrupt it is silently discarded and an
 // empty cache is returned.

@@ -209,3 +209,18 @@ func TestIgnoreAlbum(t *testing.T) {
 		t.Error("only listed names should match")
 	}
 }
+
+func TestLoadExpandsDataDir(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("data_dir: ~/data\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, "data"); cfg.DataDir != want {
+		t.Errorf("DataDir = %q, want %q", cfg.DataDir, want)
+	}
+}

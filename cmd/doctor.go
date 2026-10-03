@@ -604,7 +604,7 @@ func printDoctorPaths(specs []doctor.Spec, byName map[string]doctor.Result) erro
 }
 
 // printDoctorIDs writes each album ID once, so the output can be passed to
-// 'import --library --from-file'.
+// 'import --retag --from-file'.
 func printDoctorIDs(specs []doctor.Spec, byName map[string]doctor.Result) error {
 	issues, err := headlessIssues(specs, byName)
 	if err != nil {
