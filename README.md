@@ -2,6 +2,30 @@
 
 A command line tool for [beets](https://beets.readthedocs.io). It adds batch import, upgrade finding, library repair and a statistics report on top of `beet`. It only reads your beets database. Every change is made by calling `beet`.
 
+beets imports albums one by one. If your inbox is large, you can not look at everything at once, pick what you want now and skip the rest. `beets-importer` adds a terminal UI in front of `beet import`, so you can select many albums before anything is imported.
+
+`upgrades -i` matches your inbox against your library and shows upgrade candidates next to the library copy:
+
+[![Upgrade picker](docs/screenshot-picker.png)](#upgrades-find-upgrade-candidates)
+
+`report` writes a static HTML page about your library. Click the image to watch a short demo:
+
+[![Library report](docs/report/overview.png)](https://img.notmyhostna.me/hwTytMNws1yfx5Z8Hcbv)
+
+[![Road to all lossless](docs/report/lossless.png)](#report-library-statistics-as-a-web-page)
+
+## Why use it with beets
+
+beets does the tagging. beets-importer adds the tools around it:
+
+1. Import in batches. beets goes through a folder one album at a time. Here you see all new folders, tick the ones you want, and they import as a queue. Folders you skipped do not come back.
+2. Find upgrades. `upgrades -i` compares your inbox with your library and shows which albums are better, for example FLAC instead of MP3. You see both copies side by side and import your picks.
+3. Track your library over time. `report` writes one HTML page with formats, bitrates, size and gaps. Every run saves a snapshot, so you can see your progress to an all-lossless library.
+4. Find problems. `doctor` checks for split albums, artists spelled in different ways, untracked or empty folders, missing years and artwork, and more.
+5. Fix them in a queue. `maintenance` turns what `doctor` finds into work. You pick the cases, and the fixes run one by one. Finished albums are marked, so you can stop and continue later.
+
+It reads the beets database and calls `beet` for every change. Your plugins and config stay as they are.
+
 ## Features
 
 - Bring in new music
@@ -28,20 +52,6 @@ A command line tool for [beets](https://beets.readthedocs.io). It adds batch imp
 - Setup
   - `config init`: write an example config file
   - `config show`: show the values in use
-
-## Screenshots
-
-beets imports albums one by one. If your inbox is large, you can not look at everything at once, pick what you want now and skip the rest.
-
-`beets-importer` adds a terminal UI in front of `beet import`, so you can select many albums before anything is imported.
-
-**Upgrade picker**: scans your inbox, matches albums against your beets library and shows upgrade candidates (for example FLAC replacing MP3) next to the library copy. Select any albums, then import them all at once:
-
-![Upgrades picker](docs/screenshot-picker.png)
-
-**Inspector**: press `I` on a candidate to see the files of the source and library folders side by side. Use it to check a match before you import:
-
-![Inspector](docs/screenshot-inspector.png)
 
 ---
 
@@ -234,6 +244,10 @@ Columns: artist, album, year, track count, format. Fields that match are green. 
 To hide a wrong match (for example "Square One" matched to "Square Two"), select it and press `x` ("X ignore in upgrades"). The row is unselected and greyed out (`[⊘]`) but stays in the list. To undo it, select the greyed row and press `x` again. Ignored rows are never imported, and `CTRL+A` skips them. They are saved when the picker closes, also on ESC.
 
 Ignores are saved per feature in `ignore.json` in the [data folder](#where-files-are-stored), so an ignore in `upgrades` does not change other commands. Only that exact source and library pair is ignored. Ignored pairs are hidden on later runs and do not count toward `--limit`. To undo an ignore later, run `upgrades -i --show-ignored`. It shows ignored pairs greyed out at the bottom.
+
+Press `I` on a candidate to compare the files of the source and library folders side by side. Use it to check a match before you import:
+
+![Inspector](docs/screenshot-inspector.png)
 
 **Keys:** `SPACE` toggle, `CTRL+A` select all, `j/k` or arrows to move, `ENTER` confirm, `ESC` cancel, `I` inspect
 
@@ -450,9 +464,7 @@ A name like "gehört" can be stored with "ö" as one code point (NFC) or as "o" 
 
 ## `report`: library statistics as a web page
 
-<video src="https://img.notmyhostna.me/hwTytMNws1yfx5Z8Hcbv" controls muted width="100%"></video>
-
-[Watch the demo](https://img.notmyhostna.me/hwTytMNws1yfx5Z8Hcbv)
+[Watch the demo video](https://img.notmyhostna.me/hwTytMNws1yfx5Z8Hcbv)
 
 Reads the beets database (read-only) and writes one `index.html`. You do not need a server. The page loads [Carbon Charts](https://charts.carbondesignsystem.com) and the IBM Plex font from jsDelivr (fixed versions, with integrity hashes where it matters), so your browser needs internet access. Covers of recent imports are linked from the file system at full size. A smaller copy is embedded in case the file can not be opened.
 
@@ -464,15 +476,7 @@ beets-importer report
 beets-importer report --output ~/Music/report
 ```
 
-### Screenshots
-
-Totals and the most recent imports, with cover art.
-
-![Report: overview](docs/report/overview.png)
-
-How far you are from an all-lossless library, and the trend over time.
-
-![Report: lossless](docs/report/lossless.png)
+### More screenshots
 
 Formats, lossy bitrates, lossless resolution and how formats add up to lossless and lossy.
 
